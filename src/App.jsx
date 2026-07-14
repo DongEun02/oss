@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import { BrandMark, SITE_ICON_DATA_URL } from "./components/BrandMark.jsx";
 import { Icons, PRStatusBadge } from "./components/Icons.jsx";
 import { LanguageFilterBar } from "./components/LanguageFilterBar.jsx";
+import { MyPage } from "./components/MyPage.jsx";
+import { usePersistentState } from "./hooks/usePersistentState.js";
 import {
   CONTRIBUTING_GUIDE_LINKS,
   DIFFICULTY_CARD_LABELS,
   DIFFICULTY_FILTERS,
-  FEATURE_RECOMMENDATIONS,
   GUIDE_REPO_NAMES,
   ISSUE_TYPE_FILTERS,
   REPO_GUIDE_KEYS,
@@ -15,19 +16,48 @@ import {
   formatGithubDate,
   getRepoVisual,
   matchesLanguage,
-  parseGithubIssueUrl,
-  sanitizeGithubHtml
+  parseGithubIssueUrl
 } from "./data/content.js";
+import { fetchRecommendedIssues } from "./services/githubRecommendations.js";
+import { createWorkspaceItem, WORKSPACE_STATUSES } from "./services/userWorkspace.js";
+
+const LANDING_PREVIEW_ISSUES = [
+  {
+    repo: "TanStack/query",
+    meta: "Open · Bug",
+    title: "ErrorBoundary retry behavior",
+    badge: "분석 중"
+  },
+  {
+    repo: "facebook/react",
+    meta: "Open · Compiler",
+    title: "Compiler serialization issue",
+    badge: "핵심 정리"
+  },
+  {
+    repo: "vercel/next.js",
+    meta: "Good first issue",
+    title: "Dynamic route in symlink",
+    badge: "추천"
+  },
+  {
+    repo: "TanStack/query",
+    meta: "Open · Help wanted",
+    title: "StackBlitz example behavior",
+    badge: "분석 대기"
+  }
+];
 
 export default function App() {
   // --- Navigation & States ---
-  const [view, setView] = useState('landing'); // 'landing' | 'translation' | 'feature' | 'guide'
+  const [view, setView] = useState('landing'); // 'landing' | 'translation' | 'feature' | 'guide' | 'mypage'
+  const [myPageStatus, setMyPageStatus] = useState('interested');
 
   // Translation Screen States
   const [translationViewMode, setTranslationViewMode] = useState('list'); // 'list' | 'detail'
   const [selectedRepo, setSelectedRepo] = useState('tanstack'); // 'tanstack' | 'react' | 'nextjs'
   const [selectedDocId, setSelectedDocId] = useState('query-keys');
-  const [translationChecked, setTranslationChecked] = useState({
+  const [translationChecked, setTranslationChecked] = usePersistentState("oss:translation-checklist:v1", {
     fork: false, clone: false, branch: false, edit: false, pr: false
   });
   const [translationSearch, setTranslationQuery] = useState("");
@@ -35,8 +65,8 @@ export default function App() {
 
   // Feature screen States
   const [featureViewMode, setFeatureViewMode] = useState('repo-list'); // 'repo-list' | 'detail'
-  const [issueData, setIssueData] = useState(FEATURE_RECOMMENDATIONS[0]);
-  const [selectedPrId, setSelectedPrId] = useState('pr-9968');
+  const [issueData, setIssueData] = useState(null);
+  const [selectedPrId, setSelectedPrId] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState("All");
   const [selectedIssueType, setSelectedIssueType] = useState("All");
   const [featureRepoSearch, setFeatureRepoSearch] = useState("");
@@ -45,24 +75,35 @@ export default function App() {
   const [issueUrl, setIssueUrl] = useState("");
   const [issueImportLoading, setIssueImportLoading] = useState(false);
   const [issueImportError, setIssueImportError] = useState("");
+  const [codexAnalysis, setCodexAnalysis] = useState(null);
+  const [codexAnalysisLoading, setCodexAnalysisLoading] = useState(false);
+  const [codexAnalysisError, setCodexAnalysisError] = useState("");
+  const [featureIssues, setFeatureIssues] = useState([]);
+  const [featureRecommendationsLoading, setFeatureRecommendationsLoading] = useState(false);
+  const [featureRecommendationsLoaded, setFeatureRecommendationsLoaded] = useState(false);
+  const [featureRecommendationsError, setFeatureRecommendationsError] = useState("");
+  const [featureRecommendationsLoadedAt, setFeatureRecommendationsLoadedAt] = useState("");
+  const [featureRecommendationFailures, setFeatureRecommendationFailures] = useState([]);
+  const [recommendationRefreshVersion, setRecommendationRefreshVersion] = useState(0);
 
   // Guide Explorer States (New Page)
   const [guideRepoKey, setGuideRepoKey] = useState('tanstack'); // 'tanstack' | 'react' | 'nextjs'
   const [guideSearchQuery, setGuideSearchQuery] = useState("");
-  const [guideCompletedChecklist, setGuideCompletedChecklist] = useState({});
+  const [guideCompletedChecklist, setGuideCompletedChecklist] = usePersistentState("oss:guide-checklist:v1", {});
 
   // Global Interactive Utilities
-  const [bookmarks, setBookmarks] = useState({
+  const [bookmarks, setBookmarks] = usePersistentState("oss:repository-bookmarks:v1", {
     "TanStack Query": true,
     "React (공식 한국어 문서)": false,
     "Next.js": false
   });
-  const [interestedTasks, setInterestedTasks] = useState({});
+  const [trackedTasks, setTrackedTasks] = usePersistentState("oss:workspace-items:v1", {});
+  const interestedTasks = trackedTasks;
   const [toast, setToast] = useState("");
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [view, translationViewMode, featureViewMode]);
+  }, [view, translationViewMode, featureViewMode, myPageStatus]);
 
   useEffect(() => {
     let favicon = document.querySelector('link[rel="icon"]');
@@ -75,6 +116,41 @@ export default function App() {
     favicon.href = SITE_ICON_DATA_URL;
     document.title = 'OSS';
   }, []);
+
+  useEffect(() => {
+    if (view !== 'feature' || featureRecommendationsLoaded) return undefined;
+
+    const controller = new AbortController();
+    let active = true;
+    setFeatureRecommendationsLoading(true);
+    setFeatureRecommendationsError("");
+    setFeatureRecommendationFailures([]);
+
+    fetchRecommendedIssues({
+      force: recommendationRefreshVersion > 0,
+      signal: controller.signal
+    })
+      .then(result => {
+        if (!active) return;
+        setFeatureIssues(result.issues);
+        setFeatureRecommendationFailures(result.failedRepositories);
+        setFeatureRecommendationsLoadedAt(result.loadedAt);
+        setFeatureRecommendationsLoaded(true);
+      })
+      .catch(error => {
+        if (!active || error?.name === 'AbortError') return;
+        setFeatureRecommendationsError(error?.message || "GitHub 추천 이슈를 불러오지 못했습니다.");
+        setFeatureRecommendationsLoaded(true);
+      })
+      .finally(() => {
+        if (active) setFeatureRecommendationsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [view, featureRecommendationsLoaded, recommendationRefreshVersion]);
 
   const triggerToast = (msg) => {
     setToast(msg);
@@ -89,12 +165,45 @@ export default function App() {
     });
   };
 
-  const toggleTaskInterest = (taskId, taskTitle) => {
-    setInterestedTasks(prev => {
-      const updated = { ...prev, [taskId]: !prev[taskId] };
-      triggerToast(updated[taskId] ? `'${taskTitle}' 이슈를 관심 목록에 추가했습니다.` : `'${taskTitle}' 이슈를 관심 목록에서 제외했습니다.`);
-      return updated;
+  const toggleTaskInterest = (task, kind) => {
+    setTrackedTasks(previousItems => {
+      if (previousItems[task.id]) {
+        const updatedItems = { ...previousItems };
+        delete updatedItems[task.id];
+        triggerToast(`'${task.titleKo || task.title}' 작업을 관심 목록에서 제외했습니다.`);
+        return updatedItems;
+      }
+
+      const workspaceItem = createWorkspaceItem(task, kind);
+      triggerToast(`'${workspaceItem.title}' 작업을 관심 목록에 추가했습니다.`);
+      return { ...previousItems, [task.id]: workspaceItem };
     });
+  };
+
+  const updateWorkspaceStatus = (taskId, status) => {
+    const statusLabel = WORKSPACE_STATUSES.find(item => item.value === status)?.label || "진행 상태";
+    setTrackedTasks(previousItems => {
+      const targetItem = previousItems[taskId];
+      if (!targetItem) return previousItems;
+      return {
+        ...previousItems,
+        [taskId]: {
+          ...targetItem,
+          status,
+          updatedAt: new Date().toISOString()
+        }
+      };
+    });
+    triggerToast(`${statusLabel}로 이동했습니다.`);
+  };
+
+  const removeWorkspaceItem = item => {
+    setTrackedTasks(previousItems => {
+      const updatedItems = { ...previousItems };
+      delete updatedItems[item.id];
+      return updatedItems;
+    });
+    triggerToast(`'${item.title}' 작업을 목록에서 삭제했습니다.`);
   };
 
   const handleCopyToClipboard = (text, type) => {
@@ -118,6 +227,103 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const refreshFeatureRecommendations = () => {
+    setFeatureRecommendationsLoaded(false);
+    setFeatureRecommendationsError("");
+    setFeatureIssues([]);
+    setRecommendationRefreshVersion(version => version + 1);
+  };
+
+  const analyzeIssueWithCodex = async targetUrl => {
+    setCodexAnalysis(null);
+    setCodexAnalysisError("");
+    setCodexAnalysisLoading(true);
+
+    try {
+      const response = await fetch("/api/analyze-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issueUrl: targetUrl })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "이슈 분석 요청에 실패했습니다.");
+
+      const nextAnalysis = {
+        ...data.analysis,
+        cached: !!data.cached,
+        generatedAt: data.generatedAt
+      };
+      const translatedIssueFields = {
+        titleKo: nextAnalysis.translatedTitleKo,
+        summaryKo: nextAnalysis.summaryKo,
+        codexAnalysis: nextAnalysis
+      };
+
+      setCodexAnalysis(nextAnalysis);
+      setIssueData(currentIssue => (
+        currentIssue?.url === targetUrl
+          ? { ...currentIssue, ...translatedIssueFields }
+          : currentIssue
+      ));
+      setFeatureIssues(currentIssues => currentIssues.map(issue => (
+        issue.url === targetUrl
+          ? { ...issue, ...translatedIssueFields }
+          : issue
+      )));
+      setTrackedTasks(previousItems => {
+        const matchingItem = Object.values(previousItems).find(item => item.url === targetUrl);
+        if (!matchingItem) return previousItems;
+
+        return {
+          ...previousItems,
+          [matchingItem.id]: {
+            ...matchingItem,
+            title: nextAnalysis.translatedTitleKo,
+            summary: nextAnalysis.summaryKo,
+            updatedAt: new Date().toISOString(),
+            data: {
+              ...matchingItem.data,
+              ...translatedIssueFields
+            }
+          }
+        };
+      });
+    } catch (error) {
+      const isNetworkError = error instanceof TypeError;
+      setCodexAnalysisError(
+        isNetworkError
+          ? "분석 서버에 연결할 수 없습니다. 개발 서버 상태를 확인해 주세요."
+          : error.message
+      );
+    } finally {
+      setCodexAnalysisLoading(false);
+    }
+  };
+
+  const openWorkspaceItem = item => {
+    if (item.kind === "translation") {
+      setSelectedRepo(item.data.repoKey);
+      setSelectedDocId(item.data.docId);
+      setTranslationViewMode('detail');
+      setView('translation');
+      return;
+    }
+
+    const savedIssue = {
+      ...item.data,
+      titleKo: item.data.titleKo || item.title,
+      summaryKo: item.data.summaryKo || item.summary
+    };
+    setIssueData(savedIssue);
+    setSelectedPrId("");
+    setCodexAnalysis(savedIssue.codexAnalysis || null);
+    setCodexAnalysisError("");
+    setFeatureSourceMode(savedIssue.source === 'github-import' ? 'url' : 'recommended');
+    setFeatureViewMode('detail');
+    setView('feature');
+    if (!savedIssue.codexAnalysis) void analyzeIssueWithCodex(savedIssue.url);
+  };
+
   const importGithubIssue = async (event) => {
     event.preventDefault();
     const parsed = parseGithubIssueUrl(issueUrl);
@@ -128,6 +334,8 @@ export default function App() {
 
     setIssueImportLoading(true);
     setIssueImportError("");
+    setCodexAnalysis(null);
+    setCodexAnalysisError("");
 
     try {
       const response = await fetch(
@@ -160,7 +368,6 @@ export default function App() {
         title: data.title,
         summary: data.body || "작성된 본문이 없습니다.",
         body: data.body || "작성된 본문이 없습니다.",
-        bodyHtml: sanitizeGithubHtml(data.body_html || ""),
         status: data.state === "open" ? "Open" : "Closed",
         labels: (data.labels || []).map(label => {
           const color = typeof label === "string" ? "d0d7de" : label.color;
@@ -187,6 +394,7 @@ export default function App() {
       setIssueData(importedIssue);
       setSelectedPrId("");
       setFeatureViewMode('detail');
+      void analyzeIssueWithCodex(importedIssue.url);
     } catch (error) {
       setIssueImportError(error instanceof Error ? error.message : "이슈를 불러오지 못했습니다.");
     } finally {
@@ -202,7 +410,7 @@ export default function App() {
     return matchSearch && matchLanguage;
   });
 
-  const filteredFeatureIssues = FEATURE_RECOMMENDATIONS.filter(issue => {
+  const filteredFeatureIssues = featureIssues.filter(issue => {
     const query = featureRepoSearch.trim().toLowerCase();
     const matchSearch = !query || [issue.repo, issue.title, issue.summary, issue.workType, issue.typeLabel]
       .some(value => value.toLowerCase().includes(query));
@@ -219,6 +427,15 @@ export default function App() {
   });
 
   const prsList = issueData?.prs || [];
+  const isGithubIssue = issueData?.source === 'github-import' || issueData?.source === 'github-recommendation';
+  const recommendationLoadedAtText = featureRecommendationsLoadedAt
+    ? new Intl.DateTimeFormat('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(featureRecommendationsLoadedAt))
+    : '';
 
   return (
     <>
@@ -283,6 +500,16 @@ export default function App() {
             >
               기여 가이드
             </button>
+            <button
+              onClick={() => setView('mypage')}
+              className={`nav-button text-xs px-3 py-1.5 transition-all ${
+                view === 'mypage'
+                  ? "nav-button-active"
+                  : ""
+              }`}
+            >
+              마이페이지
+            </button>
           </nav>
 
           <div className="header-actions">
@@ -308,30 +535,37 @@ export default function App() {
         {view === 'landing' && (
           <div className="landing-home animate-fade-in">
             <section className="landing-intro">
+              <div className="landing-intro-visual" aria-hidden="true">
+                <div className="landing-intro-stream">
+                  <div className="landing-intro-stream-track">
+                    {[0, 1].map(groupIndex => (
+                      <div className="landing-intro-stream-group" key={groupIndex}>
+                        {LANDING_PREVIEW_ISSUES.map(issue => (
+                          <div className="landing-intro-issue-row" key={`${groupIndex}-${issue.repo}-${issue.title}`}>
+                            <img src={getRepoVisual(issue.repo).image} alt="" />
+                            <div>
+                              <span>{issue.repo} · {issue.meta}</span>
+                              <strong>{issue.title}</strong>
+                            </div>
+                            <em>{issue.badge}</em>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="landing-intro-content">
                 <span className="landing-intro-eyebrow">Open source starter</span>
-                <h1>OSS에서 첫 오픈소스 기여를 시작하세요.</h1>
+                <h1>
+                  OSS에서 첫 오픈소스 기여를<br />
+                  시작하세요.
+                </h1>
                 <p className="landing-intro-copy">
-                  번역 작업, 코드 이슈 분석, 프로젝트별 기여 규칙을 한곳에서 확인할 수 있습니다.
+                  번역 작업, 코드 이슈 분석, 프로젝트별 기여 규칙을 한곳에서 확인할 수 있습니다.<br />
                   지금 필요한 도움부터 선택해 순서대로 진행하세요.
                 </p>
-                <div className="landing-intro-actions">
-                  <button
-                    type="button"
-                    className="landing-intro-primary"
-                    onClick={() => { setView('translation'); setTranslationViewMode('list'); }}
-                  >
-                    번역 작업 보기
-                    <Icons.ArrowRight className="w-3.5 h-3.5 text-white" />
-                  </button>
-                  <button
-                    type="button"
-                    className="landing-intro-secondary"
-                    onClick={() => { setView('feature'); setFeatureViewMode('repo-list'); setFeatureSourceMode('recommended'); }}
-                  >
-                    추천 이슈 둘러보기
-                  </button>
-                </div>
                 <div className="landing-repo-row" aria-label="지원하는 주요 오픈소스 저장소">
                   <span>주요 오픈소스 저장소</span>
                   <img src={getRepoVisual('TanStack/query').image} alt="TanStack" />
@@ -412,6 +646,22 @@ export default function App() {
               </div>
             </section>
           </div>
+        )}
+
+        {view === 'mypage' && (
+          <MyPage
+            items={trackedTasks}
+            activeStatus={myPageStatus}
+            onActiveStatusChange={setMyPageStatus}
+            onStatusChange={updateWorkspaceStatus}
+            onRemove={removeWorkspaceItem}
+            onOpen={openWorkspaceItem}
+            onBrowse={() => {
+              setView('feature');
+              setFeatureViewMode('repo-list');
+              setFeatureSourceMode('recommended');
+            }}
+          />
         )}
 
         {/* ==================== 2. DOCUMENT TRANSLATION VIEW ==================== */}
@@ -497,7 +747,7 @@ export default function App() {
                         aria-label={interestedTasks[task.id] ? `${task.title} 관심 해제` : `${task.title} 관심 추가`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleTaskInterest(task.id, task.title);
+                          toggleTaskInterest(task, "translation");
                         }}
                         className={`interest-button ${interestedTasks[task.id] ? "interest-button-active" : ""}`}
                       >
@@ -753,8 +1003,22 @@ export default function App() {
                       className="search-input w-full bg-white border focus:border-[#3f6fd9] focus:ring-1 focus:ring-[#3f6fd9] pl-9 pr-4 py-2 text-xs text-[#1f2933] outline-none placeholder:text-slate-400"
                     />
                   </div>
-                  <div className="text-xs text-[#57606a] font-medium">
-                    총 <span className="text-[#3f6fd9] font-bold">{filteredFeatureIssues.length}개</span>의 추천 이슈
+                  <div className="recommendation-sync-summary">
+                    <span>
+                      {featureRecommendationsLoading
+                        ? "GitHub 이슈를 불러오는 중"
+                        : <>총 <strong>{filteredFeatureIssues.length}개</strong>의 추천 이슈</>}
+                    </span>
+                    {recommendationLoadedAtText && !featureRecommendationsLoading && (
+                      <small>{recommendationLoadedAtText} 동기화</small>
+                    )}
+                    <button
+                      type="button"
+                      onClick={refreshFeatureRecommendations}
+                      disabled={featureRecommendationsLoading}
+                    >
+                      새로고침
+                    </button>
                   </div>
                 </div>
 
@@ -809,6 +1073,34 @@ export default function App() {
                   </div>
                 </div>
 
+                {featureRecommendationsLoading && (
+                  <div className="recommendation-status" role="status">
+                    <span className="recommendation-status-spinner" aria-hidden="true" />
+                    <div>
+                      <strong>실제 GitHub 이슈를 확인하고 있습니다.</strong>
+                      <span>열린 이슈와 저장소 라벨을 기준으로 추천 목록을 구성합니다.</span>
+                    </div>
+                  </div>
+                )}
+
+                {featureRecommendationsError && !featureRecommendationsLoading && (
+                  <div className="recommendation-status recommendation-status-error" role="alert">
+                    <Icons.Alert className="w-4 h-4 shrink-0" />
+                    <div>
+                      <strong>추천 이슈를 불러오지 못했습니다.</strong>
+                      <span>{featureRecommendationsError}</span>
+                    </div>
+                    <button type="button" onClick={refreshFeatureRecommendations}>다시 시도</button>
+                  </div>
+                )}
+
+                {featureRecommendationFailures.length > 0 && !featureRecommendationsLoading && (
+                  <div className="recommendation-partial-notice" role="status">
+                    일부 저장소를 불러오지 못해 나머지 저장소의 이슈만 표시합니다.
+                  </div>
+                )}
+
+                {!featureRecommendationsLoading && !featureRecommendationsError && (
                 <div className="contribution-list">
                   {filteredFeatureIssues.length > 0 ? filteredFeatureIssues.map(issue => (
                     <article
@@ -816,8 +1108,11 @@ export default function App() {
                       className="contribution-item"
                       onClick={() => {
                         setIssueData(issue);
-                        setSelectedPrId(issue.prs[0].id);
+                        setSelectedPrId("");
+                        setCodexAnalysis(issue.codexAnalysis || null);
+                        setCodexAnalysisError("");
                         setFeatureViewMode('detail');
+                        if (!issue.codexAnalysis) void analyzeIssueWithCodex(issue.url);
                       }}
                     >
                       <div
@@ -836,10 +1131,10 @@ export default function App() {
                         <div className="contribution-eyebrow">
                           <span>{issue.repo}</span>
                           <span>·</span>
-                          <span className="contribution-kind">코드 이슈</span>
+                          <span className="contribution-kind">Issue #{issue.number}</span>
                         </div>
-                        <h3 className="contribution-title">{issue.title}</h3>
-                        <p className="contribution-summary">{issue.summary}</p>
+                        <h3 className="contribution-title">{issue.titleKo || issue.title}</h3>
+                        <p className="contribution-summary">{issue.summaryKo || issue.summary}</p>
                         <div className="contribution-meta">
                           <span className="contribution-chip contribution-chip-accent">{issue.difficulty}</span>
                           <span className="contribution-chip">{issue.typeLabel}</span>
@@ -850,6 +1145,11 @@ export default function App() {
                             <span key={`${issue.id}-${tech}`} className="contribution-chip">{tech}</span>
                           ))}
                         </div>
+                        <div className="contribution-live-meta">
+                          <span>{formatGithubDate(issue.updatedAt)} 업데이트</span>
+                          <span>댓글 {issue.comments}개</span>
+                          <span>{issue.assignees.length > 0 ? `담당자 ${issue.assignees.length}명` : "담당자 없음"}</span>
+                        </div>
                       </div>
 
                       <button
@@ -857,7 +1157,7 @@ export default function App() {
                         aria-label={interestedTasks[issue.id] ? `${issue.title} 관심 해제` : `${issue.title} 관심 추가`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleTaskInterest(issue.id, issue.title);
+                          toggleTaskInterest(issue, "issue");
                         }}
                         className={`interest-button ${interestedTasks[issue.id] ? "interest-button-active" : ""}`}
                       >
@@ -868,6 +1168,7 @@ export default function App() {
                     <div className="empty-list">현재 조건에 맞는 코드 이슈가 없습니다.</div>
                   )}
                 </div>
+                )}
                   </>
                 ) : (
                   <section className="issue-import-panel" aria-labelledby="issue-import-heading">
@@ -907,21 +1208,24 @@ export default function App() {
               </div>
             )}
 
-            {featureViewMode === 'detail' && issueData?.source === 'github-import' && (
+            {featureViewMode === 'detail' && isGithubIssue && (
               <div className="space-y-6 animate-fade-in">
                 <div>
                   <button
                     type="button"
-                    onClick={() => setFeatureViewMode('repo-list')}
+                    onClick={() => {
+                      setFeatureViewMode('repo-list');
+                      setFeatureSourceMode(issueData.source === 'github-import' ? 'url' : 'recommended');
+                    }}
                     className="inline-flex items-center gap-1 text-xs text-[#3f6fd9] font-semibold hover:underline"
                   >
                     <Icons.ArrowLeft className="w-3 h-3 text-[#3f6fd9]" />
-                    URL 입력으로 돌아가기
+                    {issueData.source === 'github-import' ? 'URL 입력으로 돌아가기' : '코드 이슈 목록으로 돌아가기'}
                   </button>
                 </div>
 
-                <article className="imported-issue-card">
-                  <header className="imported-issue-header">
+                <section className="codex-analysis-card" aria-labelledby="codex-analysis-heading">
+                  <header className="analysis-issue-context">
                     <a
                       href={`https://github.com/${issueData.repo}`}
                       target="_blank"
@@ -931,7 +1235,22 @@ export default function App() {
                       <Icons.Github className="w-4 h-4" />
                       {issueData.repo} · Issue #{issueData.number}
                     </a>
-                    <h2>{issueData.title}</h2>
+                    <div className="analysis-issue-title-row">
+                      <h2>
+                        {codexAnalysisLoading && !issueData.titleKo
+                          ? "이슈 핵심 내용을 정리하고 있습니다."
+                          : issueData.titleKo || codexAnalysis?.translatedTitleKo || "이슈 분석을 불러오지 못했습니다."}
+                      </h2>
+                      <button
+                        type="button"
+                        aria-label={interestedTasks[issueData.id] ? "관심 이슈에서 제거" : "관심 이슈로 저장"}
+                        title={interestedTasks[issueData.id] ? "관심 이슈에서 제거" : "관심 이슈로 저장"}
+                        onClick={() => toggleTaskInterest(issueData, "issue")}
+                        className={`interest-button ${interestedTasks[issueData.id] ? "interest-button-active" : ""}`}
+                      >
+                        <Icons.Bookmark filled={!!interestedTasks[issueData.id]} className="w-4 h-4" />
+                      </button>
+                    </div>
 
                     <div className="imported-issue-meta">
                       <span className={`imported-issue-state ${issueData.status === 'Closed' ? 'imported-issue-state-closed' : ''}`}>
@@ -964,31 +1283,99 @@ export default function App() {
                     )}
                   </header>
 
-                  <div className="imported-issue-body">
-                    <span className="imported-issue-body-label">GitHub 이슈 본문</span>
-                    {issueData.bodyHtml ? (
-                      <div
-                        className="imported-issue-markdown"
-                        dangerouslySetInnerHTML={{ __html: issueData.bodyHtml }}
-                      />
-                    ) : (
-                      <pre>{issueData.body}</pre>
-                    )}
-                  </div>
+                  <header className="codex-analysis-header">
+                    <div>
+                      <span className="codex-analysis-kicker">핵심 정리</span>
+                      <h3 id="codex-analysis-heading">이슈 핵심 분석</h3>
+                    </div>
+                  </header>
 
-                  <footer className="imported-issue-footer">
-                    <span>마지막 업데이트 {formatGithubDate(issueData.updatedAt)}</span>
-                    <a href={issueData.url} target="_blank" rel="noreferrer">
-                      GitHub에서 원문 열기
-                      <Icons.ArrowRight className="w-3 h-3" />
-                    </a>
-                  </footer>
-                </article>
+                  {codexAnalysisLoading && (
+                    <div className="codex-analysis-loading" role="status">
+                      <span className="codex-analysis-spinner" aria-hidden="true" />
+                      <div>
+                        <strong>이슈 범위를 분석하고 있습니다.</strong>
+                        <span>첫 분석은 최대 1분 정도 걸릴 수 있습니다.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {codexAnalysisError && !codexAnalysisLoading && (
+                    <div className="codex-analysis-error" role="alert">
+                      <Icons.Alert className="w-4 h-4 shrink-0" />
+                      <span>{codexAnalysisError}</span>
+                      <button type="button" onClick={() => analyzeIssueWithCodex(issueData.url)}>
+                        다시 분석
+                      </button>
+                    </div>
+                  )}
+
+                  {codexAnalysis && !codexAnalysisLoading && (
+                    <div className="codex-analysis-content">
+                      <div className="codex-analysis-summary">
+                        <span>AI 요약</span>
+                        <p>{codexAnalysis.summaryKo}</p>
+                      </div>
+
+                      <div className="codex-analysis-metrics">
+                        <div>
+                          <span>예상 난이도</span>
+                          <strong>{codexAnalysis.difficulty.level}</strong>
+                          <small>신뢰도 {codexAnalysis.difficulty.confidence}</small>
+                        </div>
+                        <div>
+                          <span>작업 유형</span>
+                          <strong>{codexAnalysis.workType}</strong>
+                          <small>{codexAnalysis.cached ? "캐시된 분석" : "새로 분석됨"}</small>
+                        </div>
+                      </div>
+
+                      <p className="codex-analysis-rationale">{codexAnalysis.difficulty.rationale}</p>
+
+                      <div className="codex-analysis-grid">
+                        <div>
+                          <h4>먼저 확인할 순서</h4>
+                          <ol>
+                            {codexAnalysis.firstSteps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}
+                          </ol>
+                        </div>
+                        <div>
+                          <h4>필요한 기술</h4>
+                          {codexAnalysis.requiredSkills.length > 0 ? (
+                            <div className="codex-analysis-skills">
+                              {codexAnalysis.requiredSkills.map(skill => <span key={skill}>{skill}</span>)}
+                            </div>
+                          ) : <p className="codex-analysis-empty">이슈 본문만으로 특정하기 어렵습니다.</p>}
+
+                          <h4 className="codex-analysis-subheading">예상 수정 영역</h4>
+                          {codexAnalysis.likelyAreas.length > 0 ? (
+                            <ul>{codexAnalysis.likelyAreas.map(area => <li key={area}>{area}</li>)}</ul>
+                          ) : <p className="codex-analysis-empty">확정할 수 있는 파일 정보가 없습니다.</p>}
+                        </div>
+                      </div>
+
+                      {codexAnalysis.risks.length > 0 && (
+                        <div className="codex-analysis-risks">
+                          <h4>주의할 점</h4>
+                          <ul>{codexAnalysis.risks.map(risk => <li key={risk}>{risk}</li>)}</ul>
+                        </div>
+                      )}
+
+                      <footer className="codex-analysis-footer">
+                        <span>저장소 라벨과 이슈 본문을 바탕으로 정리한 결과입니다. 실제 작업 전 기여 가이드를 확인하세요.</span>
+                        <a href={issueData.url} target="_blank" rel="noreferrer">
+                          GitHub 원문 열기
+                          <Icons.ArrowRight className="w-3 h-3" />
+                        </a>
+                      </footer>
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 
             {/* 3-C. FEATURE/BUG FIX DETAILED CHANGES AND PR TRACKING VIEW */}
-            {featureViewMode === 'detail' && issueData?.source !== 'github-import' && (
+            {featureViewMode === 'detail' && issueData?.source === 'mock-recommendation' && (
               <div className="space-y-6 animate-fade-in">
 
                 {/* Back Link */}
