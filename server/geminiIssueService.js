@@ -110,6 +110,8 @@ const parseGithubIssueUrl = value => {
   }
 };
 
+const getRequestUrl = request => new URL(request.url || "/", "http://127.0.0.1");
+
 const fetchGithubIssue = async (issue, githubToken) => {
   const headers = {
     Accept: "application/vnd.github+json",
@@ -137,7 +139,20 @@ const fetchGithubIssue = async (issue, githubToken) => {
     body: String(data.body || "").slice(0, 12000),
     state: data.state,
     labels: (data.labels || []).map(label => typeof label === "string" ? label : label.name).filter(Boolean),
+    labelDetails: (data.labels || []).map(label => ({
+      name: typeof label === "string" ? label : label.name,
+      color: typeof label === "string" ? "d0d7de" : label.color
+    })).filter(label => label.name),
+    author: {
+      login: data.user?.login || "unknown",
+      avatarUrl: data.user?.avatar_url || "",
+      url: data.user?.html_url || data.html_url
+    },
+    assignees: data.assignees || [],
     commentCount: data.comments || 0,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    closedAt: data.closed_at,
     url: data.html_url
   };
 };
@@ -273,6 +288,37 @@ export const handleAnalyzeIssueRequest = async (request, response, options = {})
   } catch (error) {
     const [status, message] = errorMessage(error);
     console.error(`[AI issue analysis] ${status}: ${message}`);
+    jsonResponse(response, status, { error: message });
+  }
+};
+
+export const handleGithubIssueRequest = async (request, response, options = {}) => {
+  const {
+    githubToken = process.env.GITHUB_TOKEN,
+    enforceLoopback = false
+  } = options;
+
+  if (enforceLoopback && !isLoopbackRequest(request)) {
+    jsonResponse(response, 403, { error: "로컬 요청만 허용됩니다." });
+    return;
+  }
+  if (request.method !== "GET") {
+    jsonResponse(response, 405, { error: "GET 요청만 지원합니다." });
+    return;
+  }
+
+  const parsedIssue = parseGithubIssueUrl(getRequestUrl(request).searchParams.get("url"));
+  if (!parsedIssue) {
+    jsonResponse(response, 400, { error: "올바른 GitHub Issue URL을 입력해 주세요." });
+    return;
+  }
+
+  try {
+    const issue = await fetchGithubIssue(parsedIssue, githubToken);
+    jsonResponse(response, 200, { issue });
+  } catch (error) {
+    const [status, message] = errorMessage(error);
+    console.error(`[GitHub issue] ${status}: ${message}`);
     jsonResponse(response, status, { error: message });
   }
 };

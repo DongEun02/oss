@@ -432,55 +432,44 @@ export default function App() {
 
     try {
       const response = await fetch(
-        `https://api.github.com/repos/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}/issues/${parsed.number}`,
-        {
-          headers: {
-            Accept: "application/vnd.github.full+json",
-            "X-GitHub-Api-Version": "2022-11-28"
-          }
-        }
+        `/api/github-issue?url=${encodeURIComponent(issueUrl.trim())}`,
+        { headers: { Accept: "application/json" } }
       );
+      const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (response.status === 404) throw new Error("이슈를 찾을 수 없습니다. 비공개 저장소이거나 URL이 정확하지 않을 수 있습니다.");
-        if (response.status === 403) throw new Error("GitHub API 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.");
-        throw new Error("GitHub에서 이슈를 불러오지 못했습니다.");
+        throw new Error(payload.error || "GitHub에서 이슈를 불러오지 못했습니다.");
       }
 
-      const data = await response.json();
-      if (data.pull_request) {
-        throw new Error("Pull Request가 아닌 GitHub Issue URL을 입력해 주세요.");
-      }
+      const data = payload.issue;
+      if (!data) throw new Error("GitHub 이슈 응답이 올바르지 않습니다.");
 
       const importedIssue = {
         id: `github-${parsed.owner}-${parsed.repo}-${data.number}`,
         source: "github-import",
-        url: data.html_url,
-        repo: `${parsed.owner}/${parsed.repo}`,
+        url: data.url,
+        repo: data.repository,
         number: data.number,
         title: data.title,
         summary: data.body || "작성된 본문이 없습니다.",
         body: data.body || "작성된 본문이 없습니다.",
         status: data.state === "open" ? "Open" : "Closed",
-        labels: (data.labels || []).map(label => {
-          const color = typeof label === "string" ? "d0d7de" : label.color;
+        labels: (data.labelDetails || []).map(label => {
+          const color = label.color;
           return {
-            name: typeof label === "string" ? label : label.name,
+            name: label.name,
             color: /^[0-9a-f]{6}$/i.test(color || "") ? color : "d0d7de"
           };
         }),
-        techs: (data.labels || []).map(label => typeof label === "string" ? label : label.name).filter(Boolean),
+        techs: data.labels || [],
         languageTags: [],
         difficulty: null,
-        author: {
-          login: data.user?.login || "unknown",
-          avatarUrl: data.user?.avatar_url || "",
-          url: data.user?.html_url || data.html_url
-        },
-        comments: data.comments || 0,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-        closedAt: data.closed_at,
+        author: data.author,
+        assignees: data.assignees || [],
+        comments: data.commentCount || 0,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        closedAt: data.closedAt,
         prs: []
       };
 

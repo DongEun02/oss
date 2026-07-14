@@ -1,4 +1,5 @@
-import { handleAnalyzeIssueRequest } from "./geminiIssueService.js";
+import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./geminiIssueService.js";
+import { handleRecommendedIssuesRequest } from "./githubRecommendationsService.js";
 import { handleTranslationStatusRequest } from "./translationStatusService.js";
 
 export const geminiIssueApiPlugin = options => ({
@@ -10,8 +11,20 @@ export const geminiIssueApiPlugin = options => ({
         enforceLoopback: true
       })
     ));
+    server.middlewares.use("/api/github-issue", (request, response) => (
+      handleGithubIssueRequest(request, response, {
+        ...options,
+        enforceLoopback: true
+      })
+    ));
     server.middlewares.use("/api/translation-status", (request, response) => (
       handleTranslationStatusRequest(request, response, {
+        ...options,
+        enforceLoopback: true
+      })
+    ));
+    server.middlewares.use("/api/recommended-issues", (request, response) => (
+      handleRecommendedIssuesRequest(request, response, {
         ...options,
         enforceLoopback: true
       })
