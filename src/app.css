@@ -2766,10 +2766,96 @@ body {
   font-size: 9px;
 }
 
-.repository-search-summary > strong {
+.repository-search-summary-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.repository-search-summary-side > strong {
   color: #3366ff;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.repository-activity {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  margin: 0 !important;
+  color: #666666 !important;
+  font-size: 10px !important;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.repository-activity i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8c959f;
+}
+
+.repository-activity-active {
+  color: #1a7f37 !important;
+}
+
+.repository-activity-active i {
+  background: #1a7f37;
+}
+
+.repository-activity-steady {
+  color: #9a6700 !important;
+}
+
+.repository-activity-steady i {
+  background: #bf8700;
+}
+
+.repository-activity-quiet i {
+  background: #8c959f;
+}
+
+.issue-contribution-guide-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 14px 0 0;
+  border-top: 1px solid #e1e2e3;
+  color: #3366ff;
+  text-align: left;
+}
+
+.issue-contribution-guide-link span {
+  min-width: 0;
+}
+
+.issue-contribution-guide-link strong,
+.issue-contribution-guide-link small {
+  display: block;
+}
+
+.issue-contribution-guide-link strong {
+  color: #171717;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.issue-contribution-guide-link small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #777777;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issue-contribution-guide-link:hover strong {
+  color: #3366ff;
 }
 
 .guide-repository-search-panel {
@@ -4947,8 +5033,9 @@ body {
     height: 44px;
   }
 
-  .repository-search-summary > strong {
+  .repository-search-summary-side {
     grid-column: 2;
+    align-items: flex-start;
   }
 
   .imported-issue-header,

@@ -261,6 +261,7 @@ export default function App() {
         clearTimeout(requestTimeout);
         setGuideDetails(current => ({ ...current, [guideRepoKey]: result }));
         if (guideSourceMode === 'repository') setGuideRepositoryResult(result);
+        setGuideDetailError("");
         setGuideDetailLoading(false);
       })
       .catch(error => {
@@ -1407,9 +1408,21 @@ export default function App() {
                             <p>{repositoryIssueResult.repository.description}</p>
                             <span>
                               {repositoryIssueResult.repository.language} · {repositoryIssueResult.repository.license.id} · 별 {repositoryIssueResult.repository.stars.toLocaleString()}개
+                              {repositoryIssueResult.repository.activity?.pushedAt
+                                ? ` · 최근 push ${formatGithubDate(repositoryIssueResult.repository.activity.pushedAt)}`
+                                : ""}
                             </span>
                           </div>
-                          <strong>{repositoryIssues.length}개 추천</strong>
+                          <div className="repository-search-summary-side">
+                            <strong>{repositoryIssues.length}개 추천</strong>
+                            <span
+                              className={`repository-activity repository-activity-${repositoryIssueResult.repository.activity?.level || "unknown"}`}
+                              title="GitHub 마지막 push 기준: 30일 이내 활발함, 90일 이내 보통"
+                            >
+                              <i aria-hidden="true" />
+                              {repositoryIssueResult.repository.activity?.label || "활동 확인 불가"}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="relative w-full md:max-w-md">
@@ -1572,6 +1585,21 @@ export default function App() {
                           </span>
                         ))}
                       </div>
+                    )}
+
+                    {issueData.contributionGuideUrl && (
+                      <button
+                        type="button"
+                        onClick={() => openTranslatedGuide(issueData.repo)}
+                        className="issue-contribution-guide-link"
+                      >
+                        <Icons.BookOpen className="w-4 h-4 shrink-0" />
+                        <span>
+                          <strong>이 저장소의 기여 가이드 보기</strong>
+                          <small>{issueData.repo}의 공식 기여 규칙을 한국어로 확인합니다.</small>
+                        </span>
+                        <Icons.ArrowRight className="w-4 h-4 shrink-0" />
+                      </button>
                     )}
                   </header>
 
@@ -2066,7 +2094,7 @@ export default function App() {
                       <p className="text-xs">공식 기여 문서를 읽고 한국어로 정리하고 있습니다.</p>
                     </div>
                   );
-                  if (guideDetailError) return (
+                  if (guideDetailError && !selectedGuideResult) return (
                     <div className="bg-white border border-[#d0d7de] rounded-md p-8 text-center space-y-3">
                       <p className="text-xs text-[#b42318]">{guideDetailError}</p>
                       <button

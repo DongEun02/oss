@@ -22,17 +22,34 @@ const writeCache = (fullName, value) => {
   }
 };
 
-export const fetchContributionGuide = async (fullName, { signal } = {}) => {
-  const cached = readCache(fullName);
-  if (cached) return { ...cached, cached: true };
-
+const requestContributionGuide = async (fullName, signal) => {
   const response = await fetch(`/api/contribution-guide?repo=${encodeURIComponent(fullName)}`, {
     signal,
     headers: { Accept: "application/json" }
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "기여 가이드를 불러오지 못했습니다.");
+  if (!response.ok) {
+    const error = new Error(data.error || "기여 가이드를 불러오지 못했습니다.");
+    error.status = response.status;
+    throw error;
+  }
   if (!data.guide || !data.repository) throw new Error("기여 가이드 응답이 올바르지 않습니다.");
+  return data;
+};
+
+export const fetchContributionGuide = async (fullName, { signal } = {}) => {
+  const cached = readCache(fullName);
+  if (cached) return { ...cached, cached: true };
+
+  let data;
+  try {
+    data = await requestContributionGuide(fullName, signal);
+  } catch (error) {
+    if (signal?.aborted || !Number.isInteger(error.status) || error.status < 500) throw error;
+    await new Promise(resolve => setTimeout(resolve, 700));
+    if (signal?.aborted) throw error;
+    data = await requestContributionGuide(fullName, signal);
+  }
 
   writeCache(fullName, data);
   return data;

@@ -1,4 +1,26 @@
 const EXCLUDED_LICENSES = new Set(["", "NOASSERTION", "OTHER"]);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const repositoryActivity = pushedAt => {
+  const pushedAtMs = Date.parse(pushedAt || "");
+  if (!Number.isFinite(pushedAtMs)) {
+    return {
+      level: "unknown",
+      label: "활동 확인 불가",
+      pushedAt: null,
+      daysSincePush: null
+    };
+  }
+
+  const daysSincePush = Math.max(0, Math.floor((Date.now() - pushedAtMs) / DAY_MS));
+  if (daysSincePush <= 30) {
+    return { level: "active", label: "활발함", pushedAt, daysSincePush };
+  }
+  if (daysSincePush <= 90) {
+    return { level: "steady", label: "보통", pushedAt, daysSincePush };
+  }
+  return { level: "quiet", label: "활동 적음", pushedAt, daysSincePush };
+};
 
 const githubHeaders = githubToken => {
   const headers = {
@@ -84,6 +106,8 @@ export const fetchOpenSourceRepository = async (fullName, githubToken) => {
       name: repository.license?.name || licenseId
     },
     ownerAvatarUrl: repository.owner?.avatar_url || "",
+    activity: repositoryActivity(repository.pushed_at),
+    pushedAt: repository.pushed_at || null,
     contributionGuideUrl,
     contributionGuideApiUrl,
     trendingRank: null,
