@@ -9,7 +9,6 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@google/genai": "^2.11.0",
     "react": "latest",
     "react-dom": "latest"
   },

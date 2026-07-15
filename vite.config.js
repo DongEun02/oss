@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { geminiIssueApiPlugin } from "./server/geminiIssueApi.js";
+import { localApiPlugin } from "./server/localApi.js";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -10,10 +10,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      geminiIssueApiPlugin({
-        apiKey: env.GEMINI_API_KEY,
+      localApiPlugin({
+        apiKey: env.NVIDIA_API_KEY,
         githubToken: env.GITHUB_TOKEN,
-        model: env.GEMINI_MODEL || "gemini-3.1-flash-lite"
+        model: env.NVIDIA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b"
       })
     ],
     server: {

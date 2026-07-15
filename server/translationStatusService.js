@@ -1,10 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
 import {
   TRANSLATION_PROJECTS,
   getGithubDocumentUrl
 } from "../shared/translationSources.js";
+import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient.js";
 
-const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+const DEFAULT_MODEL = DEFAULT_NVIDIA_MODEL;
 const RESPONSE_CACHE_TTL_MS = 30 * 60 * 1000;
 const MAX_MARKDOWN_CHARS = 36_000;
 const responseCache = new Map();
@@ -138,9 +138,6 @@ const validateAnalyses = (value, documents) => {
 };
 
 const runTranslationAnalysis = async (documents, snapshots, { apiKey, model }) => {
-  const ai = new GoogleGenAI({ apiKey });
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90_000);
   const comparisonData = documents.map(document => {
     const snapshot = snapshots.get(document.analysisId);
     return {
@@ -168,22 +165,15 @@ const runTranslationAnalysis = async (documents, snapshots, { apiKey, model }) =
 문서 쌍:
 ${JSON.stringify(comparisonData)}`;
 
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        abortSignal: controller.signal,
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-        responseMimeType: "application/json",
-        responseJsonSchema: TRANSLATION_STATUS_SCHEMA
-      }
-    });
-    return validateAnalyses(JSON.parse(response.text || "{}"), documents);
-  } finally {
-    clearTimeout(timeout);
-  }
+  const result = await generateNvidiaJson({
+    apiKey,
+    model,
+    prompt,
+    schema: TRANSLATION_STATUS_SCHEMA,
+    maxTokens: 16_384,
+    timeoutMs: 90_000
+  });
+  return validateAnalyses(result, documents);
 };
 
 const buildResponse = (documents, snapshots, analyses) => {
@@ -284,15 +274,20 @@ const errorMessage = error => {
   const message = String(error?.message || "");
   if (message === "GITHUB_DOCUMENT_NOT_FOUND") return [404, "비교할 GitHub 문서를 찾을 수 없습니다."];
   if (message === "GITHUB_RATE_LIMIT") return [429, "GitHub API 요청 한도에 도달했습니다."];
-  if (message === "AI_KEY_MISSING") return [503, "번역 상태 분석 API 키가 설정되지 않았습니다."];
-  if (message === "AI_INVALID_RESPONSE") return [502, "번역 상태 분석 결과가 올바르지 않습니다."];
-  if (/API_KEY_INVALID|API key not valid|invalid api key|401|403/i.test(message)) {
+  if (message === "NVIDIA_KEY_MISSING") return [503, "번역 상태 분석 API 키가 설정되지 않았습니다."];
+  if (["AI_INVALID_RESPONSE", "NVIDIA_INVALID_RESPONSE", "NVIDIA_EMPTY_RESPONSE"].includes(message)) {
+    return [502, "번역 상태 분석 결과가 올바르지 않습니다."];
+  }
+  if (/NVIDIA_HTTP_(401|403)|API_KEY_INVALID|API key not valid|invalid api key/i.test(message)) {
     return [401, "번역 상태 분석 API 키가 유효하지 않습니다."];
   }
-  if (/429|quota|resource_exhausted|rate limit/i.test(message)) {
+  if (/NVIDIA_HTTP_429|quota|resource_exhausted|rate limit/i.test(message)) {
     return [429, "번역 상태 분석 사용량 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."];
   }
-  if (error?.name === "AbortError" || /aborted|timeout/i.test(message)) {
+  if (/NVIDIA_HTTP_5\d\d/.test(message)) {
+    return [503, "번역 상태 분석 요청이 일시적으로 많습니다. 잠시 후 다시 시도해 주세요."];
+  }
+  if (message === "NVIDIA_TIMEOUT" || error?.name === "AbortError" || /aborted|timeout/i.test(message)) {
     return [504, "번역 상태 분석 시간이 초과됐습니다."];
   }
   return [500, "번역 상태를 확인하지 못했습니다."];
@@ -300,9 +295,9 @@ const errorMessage = error => {
 
 export const handleTranslationStatusRequest = async (request, response, options = {}) => {
   const {
-    apiKey = process.env.GEMINI_API_KEY,
+    apiKey = process.env.NVIDIA_API_KEY,
     githubToken = process.env.GITHUB_TOKEN,
-    model = process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    model = process.env.NVIDIA_MODEL || DEFAULT_MODEL,
     enforceLoopback = false
   } = options;
 
@@ -315,7 +310,7 @@ export const handleTranslationStatusRequest = async (request, response, options 
     return;
   }
   if (!apiKey) {
-    jsonResponse(response, 503, { error: errorMessage(new Error("AI_KEY_MISSING"))[1] });
+    jsonResponse(response, 503, { error: errorMessage(new Error("NVIDIA_KEY_MISSING"))[1] });
     return;
   }
 

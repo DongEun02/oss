@@ -36,11 +36,11 @@ npm run dev
 `.env.local`에 AI 분석용 API 키를 설정합니다.
 
 ```env
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.1-flash-lite
+NVIDIA_API_KEY=
+NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 ```
 
-Vercel에 배포할 때도 동일한 환경 변수를 프로젝트 설정에 등록합니다. `api/analyze-issue.js`와 `api/translation-status.js`가 서버리스 함수로 실행되므로 키를 `VITE_` 접두사로 노출하면 안 됩니다.
+Vercel에 배포할 때도 동일한 환경 변수를 프로젝트 설정에 등록합니다. `api/analyze-issue.js`와 `api/translation-status.js`가 서버리스 함수로 실행되므로 키를 `VITE_` 접두사로 노출하면 안 됩니다. 기본 모델은 NVIDIA NIM의 무료 엔드포인트를 제공하는 `nvidia/nemotron-3-ultra-550b-a55b`입니다.
 
 GitHub 토큰은 선택 사항입니다. 공개 API 호출 제한을 높일 때만 추가합니다.
 

@@ -1,9 +1,9 @@
-import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./geminiIssueService.js";
+import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./issueAnalysisService.js";
 import { handleRecommendedIssuesRequest } from "./githubRecommendationsService.js";
 import { handleTranslationStatusRequest } from "./translationStatusService.js";
 
-export const geminiIssueApiPlugin = options => ({
-  name: "oss-local-gemini-issue-api",
+export const localApiPlugin = options => ({
+  name: "oss-local-api",
   configureServer(server) {
     server.middlewares.use("/api/analyze-issue", (request, response) => (
       handleAnalyzeIssueRequest(request, response, {
