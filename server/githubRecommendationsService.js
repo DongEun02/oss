@@ -1,24 +1,12 @@
-const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
-const ISSUES_PER_REPOSITORY = 4;
-let latestResponse = null;
+import { getMonthlyTrendingRepositories } from "./trendingRepositoriesService.js";
+import { fetchOpenSourceRepository, parseRepositoryName } from "./githubRepositoryService.js";
 
-const REPOSITORIES = [
-  {
-    fullName: "TanStack/query",
-    languageTags: ["TypeScript", "JavaScript"],
-    fallbackTechs: ["TanStack Query", "React"]
-  },
-  {
-    fullName: "facebook/react",
-    languageTags: ["JavaScript"],
-    fallbackTechs: ["React"]
-  },
-  {
-    fullName: "vercel/next.js",
-    languageTags: ["TypeScript", "JavaScript"],
-    fallbackTechs: ["Next.js", "React"]
-  }
-];
+const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
+const ISSUES_PER_REPOSITORY = 3;
+const REPOSITORIES_PER_REQUEST = 8;
+const MAX_RECOMMENDATIONS = 18;
+let latestResponse = null;
+const repositoryResponseCache = new Map();
 
 const DIFFICULTY_PATTERNS = [
   {
@@ -122,7 +110,7 @@ const recommendationScore = issue => {
   return score;
 };
 
-const toRecommendation = (rawIssue, repository) => {
+const toRecommendation = (rawIssue, repository, source = "github-recommendation") => {
   const labels = normalizeLabels(rawIssue.labels);
   const difficulty = inferDifficulty(labels);
   const workType = inferWorkType(labels, rawIssue.title || "");
@@ -131,10 +119,11 @@ const toRecommendation = (rawIssue, repository) => {
     .filter(name => !/^status:|^linear:|difficulty:/i.test(name))
     .slice(0, 3);
   const body = (rawIssue.body || "").slice(0, 60_000);
+  const fallbackTechs = [repository.name, ...(repository.topics || [])].filter(Boolean);
 
   const recommendation = {
     id: `github-${repository.fullName}-${rawIssue.number}`,
-    source: "github-recommendation",
+    source,
     url: rawIssue.html_url,
     repo: repository.fullName,
     number: rawIssue.number,
@@ -148,8 +137,12 @@ const toRecommendation = (rawIssue, repository) => {
     workType,
     typeLabel: workType,
     languageTags: repository.languageTags,
-    techs: [...new Set([...visibleLabels, ...repository.fallbackTechs])].slice(0, 4),
+    techs: [...new Set([...visibleLabels, ...fallbackTechs])].slice(0, 4),
     labels,
+    repositoryAvatarUrl: repository.ownerAvatarUrl,
+    contributionGuideUrl: repository.contributionGuideUrl,
+    trendingRank: repository.trendingRank,
+    starsThisMonth: repository.starsThisMonth,
     author: {
       login: rawIssue.user?.login || "unknown",
       avatarUrl: rawIssue.user?.avatar_url || "",
@@ -174,9 +167,13 @@ const isUsableIssue = issue => {
   return !EXCLUDED_LABEL_PATTERN.test(labelNames);
 };
 
-const fetchRepositoryIssues = async (repository, githubToken) => {
+const fetchRepositoryIssues = async (
+  repository,
+  githubToken,
+  { limit = ISSUES_PER_REPOSITORY, source = "github-recommendation" } = {}
+) => {
   const response = await fetch(
-    `https://api.github.com/repos/${repository.fullName}/issues?state=open&sort=updated&direction=desc&per_page=100`,
+    `https://api.github.com/repos/${repository.fullName}/issues?state=open&sort=updated&direction=desc&per_page=50`,
     {
       headers: githubHeaders(githubToken),
       signal: AbortSignal.timeout(20_000)
@@ -189,12 +186,42 @@ const fetchRepositoryIssues = async (repository, githubToken) => {
   const rawIssues = await response.json();
   return rawIssues
     .filter(isUsableIssue)
-    .map(issue => toRecommendation(issue, repository))
+    .map(issue => toRecommendation(issue, repository, source))
     .sort((a, b) => b.recommendationScore - a.recommendationScore)
-    .slice(0, ISSUES_PER_REPOSITORY);
+    .slice(0, limit);
 };
 
-const buildPayload = (successfulLists, failedRepositories) => {
+const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
+  const cacheKey = fullName.toLowerCase();
+  const cached = repositoryResponseCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < RESPONSE_CACHE_TTL_MS) {
+    return { ...cached.value, cached: true };
+  }
+
+  const repository = await fetchOpenSourceRepository(fullName, githubToken);
+  if (!repository.hasIssues) throw new Error("REPOSITORY_ISSUES_UNAVAILABLE");
+  const issues = await fetchRepositoryIssues(repository, githubToken, {
+    limit: MAX_RECOMMENDATIONS,
+    source: "github-repository"
+  });
+  const loadedAtMs = Date.now();
+  const value = {
+    repository,
+    issues: issues.map(({ recommendationScore: _score, ...issue }) => issue),
+    source: {
+      name: "GitHub Repository",
+      repository: repository.fullName,
+      url: repository.url
+    },
+    loadedAt: new Date(loadedAtMs).toISOString(),
+    loadedAtMs,
+    cached: false
+  };
+  repositoryResponseCache.set(cacheKey, { value, cachedAt: Date.now() });
+  return value;
+};
+
+const buildPayload = (successfulLists, failedRepositories, trending, repositories) => {
   const issues = [];
   const largestListSize = Math.max(...successfulLists.map(list => list.length), 0);
   for (let index = 0; index < largestListSize; index += 1) {
@@ -205,8 +232,14 @@ const buildPayload = (successfulLists, failedRepositories) => {
 
   const loadedAtMs = Date.now();
   return {
-    issues: issues.map(({ recommendationScore: _score, ...issue }) => issue),
+    issues: issues
+      .slice(0, MAX_RECOMMENDATIONS)
+      .map(({ recommendationScore: _score, ...issue }) => issue),
     failedRepositories,
+    source: {
+      ...trending.source,
+      repositoryCount: repositories.length
+    },
     loadedAt: new Date(loadedAtMs).toISOString(),
     loadedAtMs,
     cached: false
@@ -218,8 +251,14 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
     return { ...latestResponse.value, cached: true };
   }
 
+  const trending = await getMonthlyTrendingRepositories({ githubToken });
+  const repositories = trending.repositories
+    .filter(repository => repository.openIssues > 0)
+    .slice(0, REPOSITORIES_PER_REQUEST);
+  if (repositories.length === 0) throw new Error("GITHUB_FETCH_FAILED");
+
   const results = await Promise.allSettled(
-    REPOSITORIES.map(repository => fetchRepositoryIssues(repository, githubToken))
+    repositories.map(repository => fetchRepositoryIssues(repository, githubToken))
   );
   const successfulLists = results
     .filter(result => result.status === "fulfilled")
@@ -227,7 +266,7 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
   const failedRepositories = results.flatMap((result, index) => (
     result.status === "rejected"
       ? [{
-          repository: REPOSITORIES[index].fullName,
+          repository: repositories[index].fullName,
           message: result.reason?.message === "GITHUB_RATE_LIMIT"
             ? "GitHub API 요청 한도에 도달했습니다."
             : "이슈를 불러오지 못했습니다."
@@ -242,18 +281,57 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
     throw new Error(rateLimited ? "GITHUB_RATE_LIMIT" : "GITHUB_FETCH_FAILED");
   }
 
-  const value = buildPayload(successfulLists, failedRepositories);
+  const value = buildPayload(successfulLists, failedRepositories, trending, repositories);
   latestResponse = { value, cachedAt: Date.now() };
   return value;
 };
 
 const errorMessage = error => {
   const message = String(error?.message || "");
+  if (message === "GITHUB_REPOSITORY_NOT_FOUND") return [404, "GitHub 저장소를 찾을 수 없습니다."];
+  if (message === "REPOSITORY_NOT_OPEN_SOURCE") {
+    return [422, "공개 저장소이며 GitHub에서 라이선스가 확인되는 오픈소스만 조회할 수 있습니다."];
+  }
+  if (message === "REPOSITORY_ISSUES_UNAVAILABLE") {
+    return [422, "보관되었거나 이슈 기능을 사용하지 않는 저장소입니다."];
+  }
+  if (message === "REPOSITORY_INACTIVE") return [422, "보관되었거나 비활성화된 저장소입니다."];
   if (message === "GITHUB_RATE_LIMIT") return [429, "GitHub API 요청 한도에 도달했습니다."];
   if (error?.name === "TimeoutError" || /timeout/i.test(message)) {
     return [504, "GitHub 이슈 조회 시간이 초과됐습니다."];
   }
   return [502, "GitHub 추천 이슈를 불러오지 못했습니다."];
+};
+
+export const handleRepositoryIssuesRequest = async (request, response, options = {}) => {
+  const {
+    githubToken = process.env.GITHUB_TOKEN,
+    enforceLoopback = false
+  } = options;
+
+  if (enforceLoopback && !isLoopbackRequest(request)) {
+    jsonResponse(response, 403, { error: "로컬 요청만 허용됩니다." });
+    return;
+  }
+  if (request.method !== "GET") {
+    jsonResponse(response, 405, { error: "GET 요청만 지원합니다." });
+    return;
+  }
+
+  const fullName = parseRepositoryName(getRequestUrl(request).searchParams.get("repo"));
+  if (!fullName) {
+    jsonResponse(response, 400, { error: "owner/repository 형식의 저장소 이름을 입력해 주세요." });
+    return;
+  }
+
+  try {
+    const result = await fetchRepositoryRecommendations({ fullName, githubToken });
+    jsonResponse(response, 200, result);
+  } catch (error) {
+    const [status, message] = errorMessage(error);
+    console.error(`[GitHub repository recommendations] ${status}: ${message}`);
+    jsonResponse(response, status, { error: message });
+  }
 };
 
 export const handleRecommendedIssuesRequest = async (request, response, options = {}) => {

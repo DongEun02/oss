@@ -2018,15 +2018,6 @@ body {
   to { transform: translateY(-50%); }
 }
 
-.landing-intro-eyebrow {
-  display: block;
-  margin-bottom: 14px;
-  color: #9bb0ff;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .landing-intro h1 {
   max-width: 680px;
   margin: 0;
@@ -2044,30 +2035,10 @@ body {
   line-height: 1.8;
 }
 
-.landing-repo-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 31px;
-  color: #a8a8a8;
-  font-size: 10px;
-  font-weight: 700;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .landing-intro-stream-track {
     animation: none;
   }
-}
-
-.landing-repo-row img {
-  width: 27px;
-  height: 27px;
-  object-fit: cover;
-  border: 2px solid #353535;
-  border-radius: 8px;
-  background: #ffffff;
 }
 
 .landing-section-heading {
@@ -2735,6 +2706,138 @@ body {
   color: #888888;
   font-size: 10px;
   line-height: 1.7;
+}
+
+.repository-search-summary {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 2px;
+  border-top: 1px solid #e1e2e3;
+  border-bottom: 1px solid #e1e2e3;
+}
+
+.repository-search-summary img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border: 1px solid #e1e2e3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.repository-search-summary div {
+  min-width: 0;
+}
+
+.repository-search-summary a,
+.repository-search-summary p,
+.repository-search-summary span {
+  display: block;
+}
+
+.repository-search-summary a {
+  overflow: hidden;
+  color: #171717;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repository-search-summary a:hover {
+  color: #3366ff;
+  text-decoration: underline;
+}
+
+.repository-search-summary p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #666666;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repository-search-summary span {
+  margin-top: 4px;
+  color: #8a8a8a;
+  font-size: 9px;
+}
+
+.repository-search-summary > strong {
+  color: #3366ff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.guide-repository-search-panel {
+  padding: 22px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.guide-repository-search-panel h3 {
+  margin: 0;
+  color: #24292f;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.guide-repository-search-panel > p {
+  margin: 7px 0 0;
+  color: #57606a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.guide-repository-search-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.guide-repository-search-form .issue-import-submit {
+  width: 100%;
+}
+
+.guide-repository-result {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #eeeeee;
+}
+
+.guide-repository-result img {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.guide-repository-result strong,
+.guide-repository-result span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-repository-result strong {
+  color: #24292f;
+  font-size: 11px;
+}
+
+.guide-repository-result span {
+  margin-top: 3px;
+  color: #6e7781;
+  font-size: 9px;
 }
 
 .imported-issue-card {
@@ -4835,6 +4938,19 @@ body {
     width: 100%;
   }
 
+  .repository-search-summary {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .repository-search-summary img {
+    width: 44px;
+    height: 44px;
+  }
+
+  .repository-search-summary > strong {
+    grid-column: 2;
+  }
+
   .imported-issue-header,
   .imported-issue-body,
   .analysis-issue-context {
@@ -4911,6 +5027,18 @@ body {
   .contribution-title {
     min-height: 40px;
     font-size: 13px;
+  }
+
+  .contribution-eyebrow {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .contribution-eyebrow > span:first-child {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .interest-button {

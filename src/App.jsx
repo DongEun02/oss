@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { BrandMark, SITE_ICON_DATA_URL } from "./components/BrandMark.jsx";
 import { Icons, PRStatusBadge } from "./components/Icons.jsx";
-import { LanguageFilterBar } from "./components/LanguageFilterBar.jsx";
+import { IssueFilters, IssueRecommendationGrid } from "./components/IssueExplorer.jsx";
 import { MyPage } from "./components/MyPage.jsx";
 import { usePersistentState } from "./hooks/usePersistentState.js";
 import {
-  CONTRIBUTING_GUIDE_LINKS,
-  DIFFICULTY_CARD_LABELS,
-  DIFFICULTY_FILTERS,
-  GUIDE_REPO_NAMES,
-  ISSUE_TYPE_FILTERS,
-  REPO_GUIDE_KEYS,
   TRANSLATION_PROJECTS,
-  TRANSLATION_PRESETS,
   TRANSLATION_TASKS,
   formatGithubDate,
   getRepoVisual,
-  matchesLanguage,
-  parseGithubIssueUrl
+  matchesLanguage
 } from "./data/content.js";
+import { fetchContributionGuide } from "./services/contributionGuide.js";
 import { fetchRecommendedIssues } from "./services/githubRecommendations.js";
+import { fetchRepositoryIssues } from "./services/repositoryIssues.js";
+import { fetchTrendingRepositories } from "./services/trendingRepositories.js";
 import {
   clearTranslationStatusCache,
   fetchTranslationStatuses,
@@ -86,10 +81,12 @@ export default function App() {
   const [selectedIssueType, setSelectedIssueType] = useState("All");
   const [featureRepoSearch, setFeatureRepoSearch] = useState("");
   const [featureRepoLanguage, setFeatureRepoLanguage] = useState("All");
-  const [featureSourceMode, setFeatureSourceMode] = useState('recommended'); // 'recommended' | 'url'
-  const [issueUrl, setIssueUrl] = useState("");
-  const [issueImportLoading, setIssueImportLoading] = useState(false);
-  const [issueImportError, setIssueImportError] = useState("");
+  const [featureSourceMode, setFeatureSourceMode] = useState('recommended'); // 'recommended' | 'repository'
+  const [repositoryQuery, setRepositoryQuery] = useState("");
+  const [repositoryIssues, setRepositoryIssues] = useState([]);
+  const [repositoryIssueResult, setRepositoryIssueResult] = useState(null);
+  const [repositoryIssuesLoading, setRepositoryIssuesLoading] = useState(false);
+  const [repositoryIssuesError, setRepositoryIssuesError] = useState("");
   const [codexAnalysis, setCodexAnalysis] = useState(null);
   const [codexAnalysisLoading, setCodexAnalysisLoading] = useState(false);
   const [codexAnalysisError, setCodexAnalysisError] = useState("");
@@ -102,9 +99,22 @@ export default function App() {
   const [recommendationRefreshVersion, setRecommendationRefreshVersion] = useState(0);
 
   // Guide Explorer States (New Page)
-  const [guideRepoKey, setGuideRepoKey] = useState('tanstack'); // 'tanstack' | 'react' | 'nextjs'
+  const [guideSourceMode, setGuideSourceMode] = useState('trending'); // 'trending' | 'repository'
+  const [guideRepoKey, setGuideRepoKey] = useState('');
   const [guideSearchQuery, setGuideSearchQuery] = useState("");
+  const [guideRepositoryQuery, setGuideRepositoryQuery] = useState("");
+  const [guideRepositoryResult, setGuideRepositoryResult] = useState(null);
+  const [guideRepositorySearchLoading, setGuideRepositorySearchLoading] = useState(false);
+  const [guideRepositorySearchError, setGuideRepositorySearchError] = useState("");
   const [guideCompletedChecklist, setGuideCompletedChecklist] = usePersistentState("oss:guide-checklist:v1", {});
+  const [guideRepositories, setGuideRepositories] = useState([]);
+  const [guideRepositoriesLoading, setGuideRepositoriesLoading] = useState(false);
+  const [guideRepositoriesLoaded, setGuideRepositoriesLoaded] = useState(false);
+  const [guideRepositoriesError, setGuideRepositoriesError] = useState("");
+  const [guideDetails, setGuideDetails] = useState({});
+  const [guideDetailLoading, setGuideDetailLoading] = useState(false);
+  const [guideDetailError, setGuideDetailError] = useState("");
+  const [guideDetailRefreshVersion, setGuideDetailRefreshVersion] = useState(0);
 
   // Global Interactive Utilities
   const [bookmarks, setBookmarks] = usePersistentState("oss:repository-bookmarks:v1", {
@@ -152,7 +162,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (view !== 'feature' || featureRecommendationsLoaded) return undefined;
+    if (view !== 'feature' || featureSourceMode !== 'recommended' || featureRecommendationsLoaded) return undefined;
 
     const controller = new AbortController();
     const requestTimeout = setTimeout(() => controller.abort(), 45_000);
@@ -191,7 +201,84 @@ export default function App() {
       clearTimeout(requestTimeout);
       controller.abort();
     };
-  }, [view, recommendationRefreshVersion]);
+  }, [view, featureSourceMode, recommendationRefreshVersion]);
+
+  useEffect(() => {
+    if (view !== 'guide' || guideSourceMode !== 'trending' || guideRepositoriesLoaded) return undefined;
+
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), 45_000);
+    let active = true;
+    setGuideRepositoriesLoading(true);
+    setGuideRepositoriesError("");
+
+    fetchTrendingRepositories({ signal: controller.signal })
+      .then(result => {
+        if (!active) return;
+        clearTimeout(requestTimeout);
+        const repositoriesWithGuides = result.repositories.filter(repo => repo.contributionGuideUrl);
+        setGuideRepositories(repositoriesWithGuides);
+        setGuideRepoKey(currentKey => (
+          repositoriesWithGuides.some(repo => repo.fullName === currentKey)
+            ? currentKey
+            : repositoriesWithGuides[0]?.fullName || ""
+        ));
+        setGuideRepositoriesLoading(false);
+        setGuideRepositoriesLoaded(true);
+      })
+      .catch(error => {
+        if (!active) return;
+        clearTimeout(requestTimeout);
+        setGuideRepositoriesError(
+          error?.name === 'AbortError'
+            ? "월간 Trending 저장소를 불러오는 시간이 초과됐습니다."
+            : error?.message || "월간 Trending 저장소를 불러오지 못했습니다."
+        );
+        setGuideRepositoriesLoading(false);
+        setGuideRepositoriesLoaded(true);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(requestTimeout);
+      controller.abort();
+    };
+  }, [view, guideSourceMode, guideRepositoriesLoaded]);
+
+  useEffect(() => {
+    if (view !== 'guide' || !guideRepoKey || guideDetails[guideRepoKey]) return undefined;
+
+    const controller = new AbortController();
+    const requestTimeout = setTimeout(() => controller.abort(), 100_000);
+    let active = true;
+    setGuideDetailLoading(true);
+    setGuideDetailError("");
+
+    fetchContributionGuide(guideRepoKey, { signal: controller.signal })
+      .then(result => {
+        if (!active) return;
+        clearTimeout(requestTimeout);
+        setGuideDetails(current => ({ ...current, [guideRepoKey]: result }));
+        if (guideSourceMode === 'repository') setGuideRepositoryResult(result);
+        setGuideDetailLoading(false);
+      })
+      .catch(error => {
+        if (!active) return;
+        clearTimeout(requestTimeout);
+        setGuideDetailError(
+          error?.name === 'AbortError'
+            ? "기여 가이드를 정리하는 시간이 초과됐습니다."
+            : error?.message || "기여 가이드를 불러오지 못했습니다."
+        );
+        setGuideDetailLoading(false);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(requestTimeout);
+      controller.abort();
+    };
+  }, [view, guideSourceMode, guideRepoKey, guideDetailRefreshVersion]);
 
   useEffect(() => {
     if (view !== 'translation' || translationStatusLoaded) return undefined;
@@ -309,10 +396,45 @@ export default function App() {
   };
 
   const openTranslatedGuide = (repoName) => {
-    setGuideRepoKey(REPO_GUIDE_KEYS[repoName] || 'tanstack');
+    setGuideSourceMode('repository');
+    setGuideRepositoryQuery(repoName || "");
+    setGuideRepositoryResult(null);
+    setGuideRepoKey(repoName || "");
     setGuideSearchQuery("");
+    setGuideRepositorySearchError("");
+    setGuideDetailError("");
     setView('guide');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const searchContributionGuide = async event => {
+    event.preventDefault();
+    const query = guideRepositoryQuery.trim();
+    if (!query) {
+      setGuideRepositorySearchError("owner/repository 형식의 저장소 이름을 입력해 주세요.");
+      return;
+    }
+
+    setGuideRepositorySearchLoading(true);
+    setGuideRepositorySearchError("");
+    setGuideDetailError("");
+    setGuideRepositoryResult(null);
+    setGuideRepoKey("");
+
+    try {
+      const result = await fetchContributionGuide(query);
+      const fullName = result.repository.fullName;
+      setGuideDetails(current => ({ ...current, [fullName]: result }));
+      setGuideRepositoryResult(result);
+      setGuideRepositoryQuery(fullName);
+      setGuideRepoKey(fullName);
+    } catch (error) {
+      setGuideRepositorySearchError(
+        error instanceof Error ? error.message : "저장소의 기여 가이드를 불러오지 못했습니다."
+      );
+    } finally {
+      setGuideRepositorySearchLoading(false);
+    }
   };
 
   const refreshFeatureRecommendations = () => {
@@ -320,6 +442,13 @@ export default function App() {
     setFeatureRecommendationsError("");
     setFeatureIssues([]);
     setRecommendationRefreshVersion(version => version + 1);
+  };
+
+  const resetFeatureIssueFilters = () => {
+    setFeatureRepoSearch("");
+    setFeatureRepoLanguage("All");
+    setSelectedDifficulty("All");
+    setSelectedIssueType("All");
   };
 
   const analyzeIssueWithCodex = async targetUrl => {
@@ -354,6 +483,11 @@ export default function App() {
           : currentIssue
       ));
       setFeatureIssues(currentIssues => currentIssues.map(issue => (
+        issue.url === targetUrl
+          ? { ...issue, ...translatedIssueFields }
+          : issue
+      )));
+      setRepositoryIssues(currentIssues => currentIssues.map(issue => (
         issue.url === targetUrl
           ? { ...issue, ...translatedIssueFields }
           : issue
@@ -411,77 +545,50 @@ export default function App() {
     setSelectedPrId("");
     setCodexAnalysis(savedIssue.codexAnalysis || null);
     setCodexAnalysisError("");
-    setFeatureSourceMode(savedIssue.source === 'github-import' ? 'url' : 'recommended');
+    setFeatureSourceMode(
+      savedIssue.source === 'github-import' || savedIssue.source === 'github-repository'
+        ? 'repository'
+        : 'recommended'
+    );
     setFeatureViewMode('detail');
     setView('feature');
     if (!savedIssue.codexAnalysis) void analyzeIssueWithCodex(savedIssue.url);
   };
 
-  const importGithubIssue = async (event) => {
+  const loadRepositoryRecommendations = async (event) => {
     event.preventDefault();
-    const parsed = parseGithubIssueUrl(issueUrl);
-    if (!parsed) {
-      setIssueImportError("https://github.com/owner/repository/issues/123 형식의 이슈 URL을 입력해 주세요.");
+    const query = repositoryQuery.trim();
+    if (!query) {
+      setRepositoryIssuesError("owner/repository 형식의 저장소 이름을 입력해 주세요.");
       return;
     }
 
-    setIssueImportLoading(true);
-    setIssueImportError("");
-    setCodexAnalysis(null);
-    setCodexAnalysisError("");
+    setRepositoryIssuesLoading(true);
+    setRepositoryIssuesError("");
+    setRepositoryIssueResult(null);
+    setRepositoryIssues([]);
 
     try {
-      const response = await fetch(
-        `/api/github-issue?url=${encodeURIComponent(issueUrl.trim())}`,
-        { headers: { Accept: "application/json" } }
-      );
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload.error || "GitHub에서 이슈를 불러오지 못했습니다.");
-      }
-
-      const data = payload.issue;
-      if (!data) throw new Error("GitHub 이슈 응답이 올바르지 않습니다.");
-
-      const importedIssue = {
-        id: `github-${parsed.owner}-${parsed.repo}-${data.number}`,
-        source: "github-import",
-        url: data.url,
-        repo: data.repository,
-        number: data.number,
-        title: data.title,
-        summary: data.body || "작성된 본문이 없습니다.",
-        body: data.body || "작성된 본문이 없습니다.",
-        status: data.state === "open" ? "Open" : "Closed",
-        labels: (data.labelDetails || []).map(label => {
-          const color = label.color;
-          return {
-            name: label.name,
-            color: /^[0-9a-f]{6}$/i.test(color || "") ? color : "d0d7de"
-          };
-        }),
-        techs: data.labels || [],
-        languageTags: [],
-        difficulty: null,
-        author: data.author,
-        assignees: data.assignees || [],
-        comments: data.commentCount || 0,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        closedAt: data.closedAt,
-        prs: []
-      };
-
-      setIssueData(importedIssue);
-      setSelectedPrId("");
-      setFeatureViewMode('detail');
-      void analyzeIssueWithCodex(importedIssue.url);
+      const result = await fetchRepositoryIssues(query);
+      setRepositoryIssues(result.issues);
+      setRepositoryIssueResult(result);
+      resetFeatureIssueFilters();
     } catch (error) {
-      setIssueImportError(error instanceof Error ? error.message : "이슈를 불러오지 못했습니다.");
+      setRepositoryIssuesError(
+        error instanceof Error ? error.message : "저장소의 추천 이슈를 불러오지 못했습니다."
+      );
     } finally {
-      setIssueImportLoading(false);
+      setRepositoryIssuesLoading(false);
     }
+  };
+
+  const openIssueDetail = issue => {
+    setIssueData(issue);
+    setSelectedPrId("");
+    setCodexAnalysis(issue.codexAnalysis || null);
+    setCodexAnalysisError("");
+    setFeatureViewMode('detail');
+    if (!issue.codexAnalysis) void analyzeIssueWithCodex(issue.url);
   };
 
   const liveTranslationTasks = TRANSLATION_TASKS
@@ -505,7 +612,8 @@ export default function App() {
     return matchSearch && matchLanguage;
   });
 
-  const filteredFeatureIssues = featureIssues.filter(issue => {
+  const activeFeatureIssues = featureSourceMode === 'repository' ? repositoryIssues : featureIssues;
+  const filteredFeatureIssues = activeFeatureIssues.filter(issue => {
     const query = featureRepoSearch.trim().toLowerCase();
     const matchSearch = !query || [issue.repo, issue.title, issue.summary, issue.workType, issue.typeLabel]
       .some(value => value.toLowerCase().includes(query));
@@ -515,14 +623,25 @@ export default function App() {
     return matchSearch && matchDifficulty && matchIssueType && matchLanguage;
   });
 
-  // Filter guide repositories
-  const filteredGuideRepos = Object.entries(TRANSLATION_PRESETS).filter(([key, repo]) => {
-    return repo.name.toLowerCase().includes(guideSearchQuery.toLowerCase()) ||
-           repo.description.toLowerCase().includes(guideSearchQuery.toLowerCase());
+  const filteredGuideRepos = guideRepositories.filter(repo => {
+    const query = guideSearchQuery.trim().toLowerCase();
+    return !query || [repo.fullName, repo.description, repo.language]
+      .some(value => String(value || "").toLowerCase().includes(query));
   });
+  const selectedGuideRepository = guideRepositories.find(repo => repo.fullName === guideRepoKey);
+  const selectedGuideResult = guideDetails[guideRepoKey];
+  const featureLanguageOptions = [
+    "All",
+    ...[...new Set(activeFeatureIssues.flatMap(issue => issue.languageTags || []))]
+      .sort((a, b) => a.localeCompare(b))
+  ];
 
   const prsList = issueData?.prs || [];
-  const isGithubIssue = issueData?.source === 'github-import' || issueData?.source === 'github-recommendation';
+  const isGithubIssue = [
+    'github-import',
+    'github-recommendation',
+    'github-repository'
+  ].includes(issueData?.source);
   const recommendationLoadedAtText = featureRecommendationsLoadedAt
     ? new Intl.DateTimeFormat('ko-KR', {
         month: 'short',
@@ -665,7 +784,6 @@ export default function App() {
               </div>
 
               <div className="landing-intro-content">
-                <span className="landing-intro-eyebrow">Open source starter</span>
                 <h1>
                   OSS에서 첫 오픈소스 기여를<br />
                   시작하세요.
@@ -674,12 +792,6 @@ export default function App() {
                   번역 작업, 코드 이슈 분석, 프로젝트별 기여 규칙을 한곳에서 확인할 수 있습니다.<br />
                   지금 필요한 도움부터 선택해 순서대로 진행하세요.
                 </p>
-                <div className="landing-repo-row" aria-label="지원하는 주요 오픈소스 저장소">
-                  <span>주요 오픈소스 저장소</span>
-                  <img src={getRepoVisual('TanStack/query').image} alt="TanStack" />
-                  <img src={getRepoVisual('facebook/react').image} alt="React" />
-                  <img src={getRepoVisual('vercel/next.js').image} alt="Next.js" />
-                </div>
               </div>
             </section>
 
@@ -1110,7 +1222,17 @@ export default function App() {
               <div className="space-y-6">
                 <div className="page-heading pb-2">
                   <h2 className="text-xl font-bold text-[#1f2933]">코드 이슈</h2>
-                  <p className="text-xs text-[#57606a]">추천 목록에서 선택하거나 GitHub 이슈 URL을 직접 불러올 수 있습니다.</p>
+                  <p className="text-xs text-[#57606a]">
+                    <a
+                      href="https://github.com/trending?since=monthly"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#3f6fd9] font-semibold hover:underline"
+                    >
+                      GitHub 월간 Trending
+                    </a>{' '}
+                    오픈소스의 추천 목록을 살펴보거나 저장소 이름으로 직접 찾을 수 있습니다.
+                  </p>
                 </div>
 
                 <div className="feature-source-tabs" role="tablist" aria-label="코드 이슈 찾기 방식">
@@ -1118,7 +1240,11 @@ export default function App() {
                     type="button"
                     role="tab"
                     aria-selected={featureSourceMode === 'recommended'}
-                    onClick={() => { setFeatureSourceMode('recommended'); setIssueImportError(""); }}
+                    onClick={() => {
+                      setFeatureSourceMode('recommended');
+                      setRepositoryIssuesError("");
+                      resetFeatureIssueFilters();
+                    }}
                     className={`feature-source-tab ${featureSourceMode === 'recommended' ? 'feature-source-tab-active' : ''}`}
                   >
                     추천 이슈
@@ -1126,11 +1252,15 @@ export default function App() {
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={featureSourceMode === 'url'}
-                    onClick={() => { setFeatureSourceMode('url'); setIssueImportError(""); }}
-                    className={`feature-source-tab ${featureSourceMode === 'url' ? 'feature-source-tab-active' : ''}`}
+                    aria-selected={featureSourceMode === 'repository'}
+                    onClick={() => {
+                      setFeatureSourceMode('repository');
+                      setRepositoryIssuesError("");
+                      resetFeatureIssueFilters();
+                    }}
+                    className={`feature-source-tab ${featureSourceMode === 'repository' ? 'feature-source-tab-active' : ''}`}
                   >
-                    URL로 불러오기
+                    저장소로 찾기
                   </button>
                 </div>
 
@@ -1168,56 +1298,15 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="filter-panel p-3 space-y-3">
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-bold text-[#57606a] uppercase tracking-wider">언어 필터</span>
-                    <LanguageFilterBar
-                      selectedLanguage={featureRepoLanguage}
-                      onChange={setFeatureRepoLanguage}
-                    />
-                  </div>
-                  <div className="soft-divider pt-3 border-t space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-bold text-[#57606a] uppercase tracking-wider block">난이도</span>
-                      <span className="text-[10px] text-[#6e7781]">저장소 라벨 기준</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {DIFFICULTY_FILTERS.map(({ value, label }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setSelectedDifficulty(value)}
-                          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all ${
-                            selectedDifficulty === value
-                              ? "bg-[#3f6fd9] text-white border-[#3f6fd9]"
-                              : "bg-white text-[#57606a] border-[#d0d7de] hover:bg-[#f6f8fa]"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="soft-divider pt-3 border-t space-y-2">
-                    <span className="text-[10px] font-bold text-[#57606a] uppercase tracking-wider block">작업 유형</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {ISSUE_TYPE_FILTERS.map(type => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setSelectedIssueType(type)}
-                          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all ${
-                            selectedIssueType === type
-                              ? "bg-[#3f6fd9] text-white border-[#3f6fd9]"
-                              : "bg-white text-[#57606a] border-[#d0d7de] hover:bg-[#f6f8fa]"
-                          }`}
-                        >
-                          {type === "All" ? "전체 유형" : type}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <IssueFilters
+                  language={featureRepoLanguage}
+                  languages={featureLanguageOptions}
+                  onLanguageChange={setFeatureRepoLanguage}
+                  difficulty={selectedDifficulty}
+                  onDifficultyChange={setSelectedDifficulty}
+                  issueType={selectedIssueType}
+                  onIssueTypeChange={setSelectedIssueType}
+                />
 
                 {featureRecommendationsLoading && (
                   <div className="recommendation-status" role="status">
@@ -1247,116 +1336,116 @@ export default function App() {
                 )}
 
                 {!featureRecommendationsLoading && !featureRecommendationsError && (
-                <div className="contribution-list">
-                  {filteredFeatureIssues.length > 0 ? filteredFeatureIssues.map(issue => (
-                    <article
-                      key={issue.id}
-                      className="contribution-item"
-                      onClick={() => {
-                        setIssueData(issue);
-                        setSelectedPrId("");
-                        setCodexAnalysis(issue.codexAnalysis || null);
-                        setCodexAnalysisError("");
-                        setFeatureViewMode('detail');
-                        if (!issue.codexAnalysis) void analyzeIssueWithCodex(issue.url);
-                      }}
-                    >
-                      <div
-                        className="contribution-cover"
-                        style={{ background: getRepoVisual(issue.repo).background }}
-                        aria-hidden="true"
-                      >
-                        <span className="contribution-cover-label">
-                          {DIFFICULTY_CARD_LABELS[issue.difficultyLevel] || DIFFICULTY_CARD_LABELS.unlabeled}
-                        </span>
-                        <span
-                          className={`contribution-assignee-status ${(issue.assignees?.length || 0) > 0 ? "contribution-assignee-status-assigned" : "contribution-assignee-status-available"}`}
-                          title={(issue.assignees?.length || 0) > 0
-                            ? `담당자: ${issue.assignees.map(assignee => assignee.login).join(", ")}`
-                            : "현재 지정된 담당자가 없습니다."}
-                        >
-                          {(issue.assignees?.length || 0) > 0 ? `담당자 ${issue.assignees.length}명` : "담당자 없음"}
-                        </span>
-                        <img src={getRepoVisual(issue.repo).image} alt="" />
-                        <span className="contribution-cover-kind"><Icons.Code className="w-3.5 h-3.5" /> 코드</span>
-                      </div>
-
-                      <div className="contribution-main">
-                        <div className="contribution-eyebrow">
-                          <span>{issue.repo}</span>
-                          <span>·</span>
-                          <span className="contribution-kind">Issue #{issue.number}</span>
-                        </div>
-                        <h3 className="contribution-title">{issue.titleKo || issue.title}</h3>
-                        <p className="contribution-summary">{issue.summaryKo || issue.summary}</p>
-                        <div className="contribution-meta">
-                          <span className="contribution-chip contribution-chip-accent">{issue.difficulty}</span>
-                          <span className="contribution-chip">{issue.typeLabel}</span>
-                          {issue.languageTags.map(language => (
-                            <span key={`${issue.id}-${language}`} className="contribution-chip">{language}</span>
-                          ))}
-                          {issue.techs.filter(tech => !issue.languageTags.includes(tech)).slice(0, 2).map(tech => (
-                            <span key={`${issue.id}-${tech}`} className="contribution-chip">{tech}</span>
-                          ))}
-                        </div>
-                        <div className="contribution-live-meta">
-                          <span>{formatGithubDate(issue.updatedAt)} 업데이트</span>
-                          <span>댓글 {issue.comments}개</span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        aria-label={interestedTasks[issue.id] ? `${issue.title} 관심 해제` : `${issue.title} 관심 추가`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTaskInterest(issue, "issue");
-                        }}
-                        className={`interest-button ${interestedTasks[issue.id] ? "interest-button-active" : ""}`}
-                      >
-                        <Icons.Bookmark filled={!!interestedTasks[issue.id]} className="w-4 h-4" />
-                      </button>
-                    </article>
-                  )) : (
-                    <div className="empty-list">현재 조건에 맞는 코드 이슈가 없습니다.</div>
-                  )}
-                </div>
+                  <IssueRecommendationGrid
+                    issues={filteredFeatureIssues}
+                    interestedTasks={interestedTasks}
+                    onSelectIssue={openIssueDetail}
+                    onToggleInterest={toggleTaskInterest}
+                  />
                 )}
                   </>
                 ) : (
-                  <section className="issue-import-panel" aria-labelledby="issue-import-heading">
-                    <h3 id="issue-import-heading">GitHub 이슈 URL 불러오기</h3>
-                    <p>공개 저장소의 이슈 주소를 입력하면 GitHub의 최신 제목, 본문, 상태, 라벨과 작성자 정보를 가져옵니다.</p>
+                  <div className="space-y-5">
+                    <section className="issue-import-panel" aria-labelledby="repository-search-heading">
+                      <h3 id="repository-search-heading">저장소 추천 이슈 찾기</h3>
+                      <p>GitHub의 <code>owner/repository</code> 이름을 입력하면 기여하기 적합한 열린 이슈를 선별합니다.</p>
 
-                    <form className="issue-import-form" onSubmit={importGithubIssue}>
-                      <div className="issue-import-input-wrap">
-                        <Icons.Github className="w-4 h-4" />
-                        <input
-                          type="url"
-                          value={issueUrl}
-                          onChange={(event) => { setIssueUrl(event.target.value); setIssueImportError(""); }}
-                          placeholder="https://github.com/owner/repository/issues/123"
-                          aria-label="GitHub 이슈 URL"
-                          className="issue-import-input"
-                        />
+                      <form className="issue-import-form" onSubmit={loadRepositoryRecommendations}>
+                        <div className="issue-import-input-wrap">
+                          <Icons.Github className="w-4 h-4" />
+                          <input
+                            type="text"
+                            value={repositoryQuery}
+                            onChange={(event) => {
+                              setRepositoryQuery(event.target.value);
+                              setRepositoryIssuesError("");
+                            }}
+                            placeholder="facebook/react"
+                            aria-label="GitHub 저장소 이름"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            className="issue-import-input"
+                          />
+                        </div>
+                        <button type="submit" className="issue-import-submit" disabled={repositoryIssuesLoading}>
+                          {repositoryIssuesLoading ? "불러오는 중" : "이슈 불러오기"}
+                          {!repositoryIssuesLoading && <Icons.ArrowRight className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      </form>
+
+                      {repositoryIssuesError && (
+                        <div className="issue-import-error" role="alert">
+                          <Icons.Alert className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>{repositoryIssuesError}</span>
+                        </div>
+                      )}
+
+                      <div className="issue-import-note">
+                        공개 상태이며 GitHub에서 라이선스가 확인되는 저장소만 지원합니다.
                       </div>
-                      <button type="submit" className="issue-import-submit" disabled={issueImportLoading}>
-                        {issueImportLoading ? "불러오는 중" : "이슈 불러오기"}
-                        {!issueImportLoading && <Icons.ArrowRight className="w-3.5 h-3.5 text-white" />}
-                      </button>
-                    </form>
+                    </section>
 
-                    {issueImportError && (
-                      <div className="issue-import-error" role="alert">
-                        <Icons.Alert className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>{issueImportError}</span>
+                    {repositoryIssuesLoading && (
+                      <div className="recommendation-status" role="status">
+                        <span className="recommendation-status-spinner" aria-hidden="true" />
+                        <div>
+                          <strong>저장소의 열린 이슈를 확인하고 있습니다.</strong>
+                          <span>라벨, 담당자, 본문 내용과 최근 업데이트를 기준으로 정렬합니다.</span>
+                        </div>
                       </div>
                     )}
 
-                    <div className="issue-import-note">
-                      공개 GitHub 저장소의 <code>/issues/숫자</code> 주소만 지원합니다. 비공개 저장소는 로그인 연동 전까지 불러올 수 없습니다.
-                    </div>
-                  </section>
+                    {repositoryIssueResult && !repositoryIssuesLoading && (
+                      <>
+                        <div className="repository-search-summary">
+                          <img src={repositoryIssueResult.repository.ownerAvatarUrl} alt="" />
+                          <div>
+                            <a href={repositoryIssueResult.repository.url} target="_blank" rel="noreferrer">
+                              {repositoryIssueResult.repository.fullName}
+                            </a>
+                            <p>{repositoryIssueResult.repository.description}</p>
+                            <span>
+                              {repositoryIssueResult.repository.language} · {repositoryIssueResult.repository.license.id} · 별 {repositoryIssueResult.repository.stars.toLocaleString()}개
+                            </span>
+                          </div>
+                          <strong>{repositoryIssues.length}개 추천</strong>
+                        </div>
+
+                        <div className="relative w-full md:max-w-md">
+                          <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                            <Icons.Search className="w-4 h-4" />
+                          </span>
+                          <input
+                            type="text"
+                            value={featureRepoSearch}
+                            onChange={(event) => setFeatureRepoSearch(event.target.value)}
+                            placeholder="불러온 이슈 안에서 검색"
+                            className="search-input w-full bg-white border focus:border-[#3f6fd9] focus:ring-1 focus:ring-[#3f6fd9] pl-9 pr-4 py-2 text-xs text-[#1f2933] outline-none placeholder:text-slate-400"
+                          />
+                        </div>
+
+                        <IssueFilters
+                          language={featureRepoLanguage}
+                          languages={featureLanguageOptions}
+                          onLanguageChange={setFeatureRepoLanguage}
+                          difficulty={selectedDifficulty}
+                          onDifficultyChange={setSelectedDifficulty}
+                          issueType={selectedIssueType}
+                          onIssueTypeChange={setSelectedIssueType}
+                        />
+
+                        <IssueRecommendationGrid
+                          issues={filteredFeatureIssues}
+                          interestedTasks={interestedTasks}
+                          onSelectIssue={openIssueDetail}
+                          onToggleInterest={toggleTaskInterest}
+                          emptyText={repositoryIssues.length === 0
+                            ? "이 저장소에서 추천할 만한 열린 이슈를 찾지 못했습니다."
+                            : "현재 필터에 맞는 이슈가 없습니다."}
+                        />
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -1368,12 +1457,18 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setFeatureViewMode('repo-list');
-                      setFeatureSourceMode(issueData.source === 'github-import' ? 'url' : 'recommended');
+                      setFeatureSourceMode(
+                        issueData.source === 'github-import' || issueData.source === 'github-repository'
+                          ? 'repository'
+                          : 'recommended'
+                      );
                     }}
                     className="inline-flex items-center gap-1 text-xs text-[#3f6fd9] font-semibold hover:underline"
                   >
                     <Icons.ArrowLeft className="w-3 h-3 text-[#3f6fd9]" />
-                    {issueData.source === 'github-import' ? 'URL 입력으로 돌아가기' : '코드 이슈 목록으로 돌아가기'}
+                    {issueData.source === 'github-import' || issueData.source === 'github-repository'
+                      ? '저장소 이슈 목록으로 돌아가기'
+                      : '코드 이슈 목록으로 돌아가기'}
                   </button>
                 </div>
 
@@ -1747,14 +1842,18 @@ export default function App() {
                                 <span className="text-xs font-semibold text-[#1f2933] block">{issueData?.repo}</span>
                                 <span className="text-[11px] text-[#57606a] block">작업 전 공식 기여 규칙과 브랜치, 테스트, PR 기준을 확인하세요.</span>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => openTranslatedGuide(issueData?.repo)}
-                                className="link-action inline-flex items-center justify-center gap-1.5 bg-white font-bold text-xs px-3.5 py-2 rounded-md border shadow-sm transition-colors"
-                              >
-                                번역 가이드 보기
-                                <Icons.ArrowRight className="w-3 h-3 text-[#3f6fd9]" />
-                              </button>
+                              {issueData?.contributionGuideUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openTranslatedGuide(issueData?.repo)}
+                                  className="link-action inline-flex items-center justify-center gap-1.5 bg-white font-bold text-xs px-3.5 py-2 rounded-md border shadow-sm transition-colors"
+                                >
+                                  번역 가이드 보기
+                                  <Icons.ArrowRight className="w-3 h-3 text-[#3f6fd9]" />
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-[#6e7781]">공식 기여 가이드 없음</span>
+                              )}
                             </div>
                           </div>
 
@@ -1779,8 +1878,51 @@ export default function App() {
             <div className="border-b border-[#d0d7de] pb-4">
               <h2 className="text-xl font-bold text-[#24292f]">기여 가이드</h2>
               <p className="text-xs text-[#57606a]">
-                프로젝트별 <code className="bg-[#eaeef2] text-[#24292f] px-1.5 py-0.5 rounded font-mono text-[11px] border border-[#d0d7de]">CONTRIBUTING.md</code> 기준과 제출 전 확인 항목을 정리했습니다.
+                <a
+                  href="https://github.com/trending?since=monthly"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#3f6fd9] font-semibold hover:underline"
+                >
+                  GitHub 월간 Trending
+                </a>{' '}
+                오픈소스 목록을 살펴보거나 저장소 이름으로 <code className="bg-[#eaeef2] text-[#24292f] px-1.5 py-0.5 rounded font-mono text-[11px] border border-[#d0d7de]">CONTRIBUTING.md</code>를 직접 찾을 수 있습니다.
               </p>
+            </div>
+
+            <div className="feature-source-tabs" role="tablist" aria-label="기여 가이드 찾기 방식">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={guideSourceMode === 'trending'}
+                onClick={() => {
+                  setGuideSourceMode('trending');
+                  setGuideRepositorySearchError("");
+                  setGuideDetailError("");
+                  setGuideRepoKey(currentKey => (
+                    guideRepositories.some(repo => repo.fullName === currentKey)
+                      ? currentKey
+                      : guideRepositories[0]?.fullName || ""
+                  ));
+                }}
+                className={`feature-source-tab ${guideSourceMode === 'trending' ? 'feature-source-tab-active' : ''}`}
+              >
+                월간 Trending
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={guideSourceMode === 'repository'}
+                onClick={() => {
+                  setGuideSourceMode('repository');
+                  setGuideRepositorySearchError("");
+                  setGuideDetailError("");
+                  setGuideRepoKey(guideRepositoryResult?.repository.fullName || "");
+                }}
+                className={`feature-source-tab ${guideSourceMode === 'repository' ? 'feature-source-tab-active' : ''}`}
+              >
+                저장소로 찾기
+              </button>
             </div>
 
             {/* Split View */}
@@ -1788,6 +1930,7 @@ export default function App() {
 
               {/* Left Side: Repos Selector with Search */}
               <div className="lg:col-span-4 space-y-4">
+                {guideSourceMode === 'trending' ? (
                 <div className="bg-white border border-[#d0d7de] rounded-md p-4 space-y-3 shadow-sm">
                   <div className="relative">
                     <span className="absolute inset-y-0 left-2.5 flex items-center text-slate-400">
@@ -1803,41 +1946,151 @@ export default function App() {
                   </div>
 
                   <div className="divide-y divide-[#d0d7de] space-y-1">
-                    {filteredGuideRepos.map(([key, repo]) => {
-                      const isSelected = guideRepoKey === key;
+                    {guideRepositoriesLoading && (
+                      <div className="py-8 text-center text-xs text-[#57606a]">월간 Trending 저장소를 확인하고 있습니다.</div>
+                    )}
+                    {guideRepositoriesError && !guideRepositoriesLoading && (
+                      <div className="py-5 text-center space-y-3">
+                        <p className="text-xs text-[#b42318]">{guideRepositoriesError}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGuideRepositoriesLoaded(false);
+                            setGuideRepositoriesError("");
+                          }}
+                          className="text-xs font-semibold text-[#3f6fd9] hover:underline"
+                        >
+                          다시 시도
+                        </button>
+                      </div>
+                    )}
+                    {!guideRepositoriesLoading && !guideRepositoriesError && filteredGuideRepos.map(repo => {
+                      const isSelected = guideRepoKey === repo.fullName;
                       return (
                         <button
-                          key={key}
-                          onClick={() => setGuideRepoKey(key)}
-                          className={`w-full text-left p-3 rounded-md transition-all flex items-center justify-between ${
+                          key={repo.fullName}
+                          onClick={() => {
+                            setGuideRepoKey(repo.fullName);
+                            setGuideDetailError("");
+                          }}
+                          className={`w-full text-left p-3 rounded-md transition-all flex items-center gap-3 ${
                             isSelected
                               ? "bg-[#eaeef2] text-slate-900 border border-[#d0d7de] shadow-sm font-semibold"
                               : "text-[#57606a] hover:bg-[#f6f8fa]"
                           }`}
                         >
-                          <div className="space-y-0.5">
-                            <span className="text-xs block text-[#24292f]">{repo.name}</span>
-                            <span className="text-[10px] text-[#57606a] block line-clamp-1">{repo.description}</span>
+                          <img src={repo.ownerAvatarUrl} alt="" className="w-8 h-8 rounded-md border border-[#d0d7de] shrink-0" />
+                          <div className="space-y-0.5 min-w-0 flex-1">
+                            <span className="text-xs block text-[#24292f] truncate">{repo.fullName}</span>
+                            <span className="text-[10px] text-[#57606a] block truncate">
+                              Trending #{repo.trendingRank} · {repo.language} · {repo.license?.id}
+                            </span>
                           </div>
                           <Icons.ArrowRight className="w-3 h-3 text-slate-400" />
                         </button>
                       );
                     })}
+                    {!guideRepositoriesLoading && !guideRepositoriesError && filteredGuideRepos.length === 0 && (
+                      <div className="py-8 text-center text-xs text-[#57606a]">검색 결과가 없습니다.</div>
+                    )}
                   </div>
                 </div>
+                ) : (
+                  <section className="guide-repository-search-panel" aria-labelledby="guide-repository-search-heading">
+                    <h3 id="guide-repository-search-heading">저장소 기여 가이드 찾기</h3>
+                    <p><code>owner/repository</code> 이름으로 공식 기여 문서를 불러옵니다.</p>
+
+                    <form className="guide-repository-search-form" onSubmit={searchContributionGuide}>
+                      <div className="issue-import-input-wrap">
+                        <Icons.Github className="w-4 h-4" />
+                        <input
+                          type="text"
+                          value={guideRepositoryQuery}
+                          onChange={event => {
+                            setGuideRepositoryQuery(event.target.value);
+                            setGuideRepositorySearchError("");
+                          }}
+                          placeholder="vercel/next.js"
+                          aria-label="기여 가이드 저장소 이름"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          className="issue-import-input"
+                        />
+                      </div>
+                      <button type="submit" className="issue-import-submit" disabled={guideRepositorySearchLoading}>
+                        {guideRepositorySearchLoading ? "불러오는 중" : "가이드 불러오기"}
+                        {!guideRepositorySearchLoading && <Icons.ArrowRight className="w-3.5 h-3.5 text-white" />}
+                      </button>
+                    </form>
+
+                    {guideRepositorySearchError && (
+                      <div className="issue-import-error" role="alert">
+                        <Icons.Alert className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{guideRepositorySearchError}</span>
+                      </div>
+                    )}
+
+                    <div className="issue-import-note">
+                      공개 상태이며 라이선스와 공식 <code>CONTRIBUTING.md</code>가 확인되는 저장소만 지원합니다.
+                    </div>
+
+                    {guideRepositoryResult && (
+                      <div className="guide-repository-result">
+                        <img src={guideRepositoryResult.repository.ownerAvatarUrl} alt="" />
+                        <div>
+                          <strong>{guideRepositoryResult.repository.fullName}</strong>
+                          <span>{guideRepositoryResult.repository.language} · {guideRepositoryResult.repository.license.id}</span>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
 
               {/* Right Side: Contributing Guideline README Renderer */}
               <div className="lg:col-span-8">
                 {(() => {
-                  const targetRepo = TRANSLATION_PRESETS[guideRepoKey];
-                  const originalGuideUrl = CONTRIBUTING_GUIDE_LINKS[GUIDE_REPO_NAMES[guideRepoKey]];
-                  if (!targetRepo || !targetRepo.guidelines) return (
-                    <div className="bg-white border border-[#d0d7de] rounded-md p-8 text-center text-[#57606a]">
-                      기여 가이드가 존재하지 않거나 구성 중입니다.
+                  if (
+                    (guideSourceMode === 'trending' && guideRepositoriesLoading)
+                    || guideDetailLoading
+                    || guideRepositorySearchLoading
+                  ) return (
+                    <div className="bg-white border border-[#d0d7de] rounded-md p-10 text-center text-[#57606a] space-y-2">
+                      <span className="recommendation-status-spinner inline-block" aria-hidden="true" />
+                      <p className="text-xs">공식 기여 문서를 읽고 한국어로 정리하고 있습니다.</p>
                     </div>
                   );
-                  const gl = targetRepo.guidelines;
+                  if (guideDetailError) return (
+                    <div className="bg-white border border-[#d0d7de] rounded-md p-8 text-center space-y-3">
+                      <p className="text-xs text-[#b42318]">{guideDetailError}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGuideDetailError("");
+                          setGuideDetailRefreshVersion(version => version + 1);
+                        }}
+                        className="text-xs font-semibold text-[#3f6fd9] hover:underline"
+                      >
+                        다시 시도
+                      </button>
+                    </div>
+                  );
+                  const targetRepo = selectedGuideResult?.repository
+                    ? {
+                        ...selectedGuideRepository,
+                        ...selectedGuideResult.repository,
+                        trendingRank: selectedGuideRepository?.trendingRank
+                          || selectedGuideResult.repository.trendingRank
+                      }
+                    : selectedGuideRepository;
+                  const gl = selectedGuideResult?.guide;
+                  if (!targetRepo || !gl) return (
+                    <div className="bg-white border border-[#d0d7de] rounded-md p-8 text-center text-[#57606a]">
+                      {guideSourceMode === 'trending'
+                        ? "왼쪽 목록에서 기여 가이드를 선택해 주세요."
+                        : "왼쪽에 저장소 이름을 입력해 기여 가이드를 불러오세요."}
+                    </div>
+                  );
                   return (
                     <div className="bg-white border border-[#d0d7de] rounded-md shadow-sm overflow-hidden">
 
@@ -1845,10 +2098,10 @@ export default function App() {
                       <div className="bg-[#f6f8fa] border-b border-[#d0d7de] px-5 py-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
                           <Icons.FileText className="w-4 h-4 shrink-0 text-[#57606a]" />
-                          <span className="text-xs font-mono font-bold text-[#24292f] truncate">CONTRIBUTING.md 번역본</span>
+                          <span className="text-xs font-mono font-bold text-[#24292f] truncate">CONTRIBUTING.md 한국어 핵심 정리</span>
                         </div>
                         <a
-                          href={originalGuideUrl}
+                          href={targetRepo.contributionGuideUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="link-action shrink-0 inline-flex items-center justify-center gap-1.5 bg-white font-bold text-xs px-3 py-1.5 rounded-md border transition-colors"
@@ -1863,12 +2116,20 @@ export default function App() {
 
                         {/* Title and Intro */}
                         <div className="border-b border-[#d0d7de] pb-4 space-y-2">
-                          <h3 className="text-xl font-bold text-[#24292f]">{targetRepo.name} 기여 매뉴얼</h3>
+                          <div className="flex items-center gap-2 text-[10px] text-[#57606a]">
+                            {targetRepo.trendingRank && <span>월간 Trending #{targetRepo.trendingRank}</span>}
+                            {targetRepo.trendingRank && <span>·</span>}
+                            <span>{targetRepo.language}</span>
+                            <span>·</span>
+                            <span>{targetRepo.license?.id}</span>
+                          </div>
+                          <h3 className="text-xl font-bold text-[#24292f]">{targetRepo.fullName} 기여 가이드</h3>
                           <p className="text-xs text-[#57606a]">{targetRepo.description}</p>
+                          <p className="text-xs text-[#24292f] leading-relaxed">{gl.summaryKo}</p>
                         </div>
 
                         {/* Branch Pattern Segment */}
-                        <div className="space-y-2">
+                        {gl.branchPattern && <div className="space-y-2">
                           <div className="flex justify-between items-center">
                             <h4 className="text-xs font-bold text-[#57606a] uppercase">작업용 권장 브랜치 유형</h4>
                             <button
@@ -1882,10 +2143,10 @@ export default function App() {
                           <div className="bg-[#f6f8fa] border border-[#d0d7de] rounded p-3 font-mono text-[11px] text-[#24292f] overflow-x-auto">
                             {gl.branchPattern}
                           </div>
-                        </div>
+                        </div>}
 
                         {/* Commit Convention Segment */}
-                        <div className="space-y-2">
+                        {gl.commitConvention && <div className="space-y-2">
                           <div className="flex justify-between items-center">
                             <h4 className="text-xs font-bold text-[#57606a] uppercase">권장 커밋 헤더 메시지</h4>
                             <button
@@ -1899,7 +2160,7 @@ export default function App() {
                           <div className="bg-[#f6f8fa] border border-[#d0d7de] rounded p-3 font-mono text-[11px] text-[#24292f] break-all">
                             {gl.commitConvention}
                           </div>
-                        </div>
+                        </div>}
 
                         {/* Sequential Steps */}
                         <div className="space-y-3">
@@ -1950,7 +2211,7 @@ export default function App() {
                         {/* Quick Action Button */}
                         <div className="pt-4 border-t border-[#d0d7de] flex justify-end">
                           <button
-                            onClick={() => triggerToast(`'${targetRepo.name}' 기여 준비 항목을 확인했습니다.`)}
+                            onClick={() => triggerToast(`'${targetRepo.fullName}' 기여 준비 항목을 확인했습니다.`)}
                             className="bg-[#3f6fd9] hover:bg-[#3158b0] text-white font-bold text-xs px-4 py-2 rounded-md shadow-sm border border-[rgba(27,31,36,0.15)] flex items-center gap-1.5 transition-all"
                           >
                             기여 준비 확인

@@ -1,14 +1,19 @@
 import React from "react";
 import { LANGUAGE_FILTERS } from "../data/content.js";
 
-export const LanguageFilterBar = ({ selectedLanguage, onChange, accent = "blue" }) => {
+export const LanguageFilterBar = ({
+  selectedLanguage,
+  onChange,
+  accent = "blue",
+  languages = LANGUAGE_FILTERS
+}) => {
   const selectedClasses = accent === "green"
     ? "bg-[#3f6fd9] text-white border-[#3f6fd9]"
     : "bg-[#3f6fd9] text-white border-[#3f6fd9]";
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {LANGUAGE_FILTERS.map(language => (
+      {languages.map(language => (
         <button
           key={language}
           type="button"

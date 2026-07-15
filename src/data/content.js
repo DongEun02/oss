@@ -371,24 +371,6 @@ export const DIFFICULTY_CARD_LABELS = {
 
 export const ISSUE_TYPE_FILTERS = ["All", "버그", "기능 개선", "리팩터링", "예외 처리", "성능", "테스트", "문서"];
 
-export const CONTRIBUTING_GUIDE_LINKS = {
-  "TanStack/query": "https://github.com/TanStack/query/blob/main/CONTRIBUTING.md",
-  "facebook/react": "https://github.com/facebook/react/blob/main/CONTRIBUTING.md",
-  "vercel/next.js": "https://github.com/vercel/next.js/blob/canary/contributing.md"
-};
-
-export const REPO_GUIDE_KEYS = {
-  "TanStack/query": "tanstack",
-  "facebook/react": "react",
-  "vercel/next.js": "nextjs"
-};
-
-export const GUIDE_REPO_NAMES = {
-  tanstack: "TanStack/query",
-  react: "facebook/react",
-  nextjs: "vercel/next.js"
-};
-
 export const REPO_VISUALS = {
   "TanStack Query": { image: "https://github.com/TanStack.png?size=320", background: "#edf3ff" },
   "TanStack/query": { image: "https://github.com/TanStack.png?size=320", background: "#edf3ff" },
