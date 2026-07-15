@@ -5,8 +5,34 @@ const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const ISSUES_PER_REPOSITORY = 3;
 const REPOSITORIES_PER_REQUEST = 8;
 const MAX_RECOMMENDATIONS = 18;
+const RELATED_PRS_PER_ISSUE = 100;
 let latestResponse = null;
 const repositoryResponseCache = new Map();
+
+const RELATED_PULL_REQUESTS_QUERY = `
+  query RelatedPullRequests($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Issue {
+        id
+        timelineItems(first: ${RELATED_PRS_PER_ISSUE}, itemTypes: [CROSS_REFERENCED_EVENT]) {
+          nodes {
+            ... on CrossReferencedEvent {
+              source {
+                __typename
+                ... on PullRequest {
+                  id
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+          }
+        }
+      }
+    }
+  }
+`;
 
 const DIFFICULTY_PATTERNS = [
   {
@@ -110,6 +136,69 @@ const recommendationScore = issue => {
   return score;
 };
 
+const relatedPullRequestResult = node => {
+  const pullRequestIds = (node?.timelineItems?.nodes || [])
+    .map(event => event?.source)
+    .filter(source => source?.__typename === "PullRequest" && source.id)
+    .map(pullRequest => pullRequest.id);
+
+  return {
+    count: new Set(pullRequestIds).size,
+    truncated: !!node?.timelineItems?.pageInfo?.hasNextPage
+  };
+};
+
+const enrichRelatedPullRequestCounts = async (issues, githubToken) => {
+  if (!githubToken || issues.length === 0) return issues;
+
+  const nodeIds = [...new Set(issues.map(issue => issue.githubNodeId).filter(Boolean))];
+  if (nodeIds.length === 0) return issues;
+
+  try {
+    const response = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        ...githubHeaders(githubToken),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        query: RELATED_PULL_REQUESTS_QUERY,
+        variables: { ids: nodeIds }
+      }),
+      signal: AbortSignal.timeout(20_000)
+    });
+    if (!response.ok) return issues;
+
+    const payload = await response.json();
+    const countsByNodeId = new Map(
+      (payload.data?.nodes || [])
+        .filter(node => node?.id)
+        .map(node => [node.id, relatedPullRequestResult(node)])
+    );
+
+    return issues.map(issue => {
+      const relatedPullRequests = countsByNodeId.get(issue.githubNodeId);
+      if (!relatedPullRequests) return issue;
+      return {
+        ...issue,
+        relatedPullRequestCount: relatedPullRequests.count,
+        relatedPullRequestCountTruncated: relatedPullRequests.truncated
+      };
+    });
+  } catch {
+    return issues;
+  }
+};
+
+const toPublicRecommendation = issue => {
+  const {
+    recommendationScore: _score,
+    githubNodeId: _githubNodeId,
+    ...publicIssue
+  } = issue;
+  return publicIssue;
+};
+
 const toRecommendation = (rawIssue, repository, source = "github-recommendation") => {
   const labels = normalizeLabels(rawIssue.labels);
   const difficulty = inferDifficulty(labels);
@@ -150,9 +239,12 @@ const toRecommendation = (rawIssue, repository, source = "github-recommendation"
     },
     assignees: rawIssue.assignees || [],
     comments: rawIssue.comments || 0,
+    relatedPullRequestCount: null,
+    relatedPullRequestCountTruncated: false,
     createdAt: rawIssue.created_at,
     updatedAt: rawIssue.updated_at,
     closedAt: rawIssue.closed_at,
+    githubNodeId: rawIssue.node_id || "",
     prs: []
   };
 
@@ -204,10 +296,11 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
     limit: MAX_RECOMMENDATIONS,
     source: "github-repository"
   });
+  const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken);
   const loadedAtMs = Date.now();
   const value = {
     repository,
-    issues: issues.map(({ recommendationScore: _score, ...issue }) => issue),
+    issues: enrichedIssues.map(toPublicRecommendation),
     source: {
       name: "GitHub Repository",
       repository: repository.fullName,
@@ -221,7 +314,7 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
   return value;
 };
 
-const buildPayload = (successfulLists, failedRepositories, trending, repositories) => {
+const interleaveIssues = successfulLists => {
   const issues = [];
   const largestListSize = Math.max(...successfulLists.map(list => list.length), 0);
   for (let index = 0; index < largestListSize; index += 1) {
@@ -230,11 +323,13 @@ const buildPayload = (successfulLists, failedRepositories, trending, repositorie
     });
   }
 
+  return issues.slice(0, MAX_RECOMMENDATIONS);
+};
+
+const buildPayload = (issues, failedRepositories, trending, repositories) => {
   const loadedAtMs = Date.now();
   return {
-    issues: issues
-      .slice(0, MAX_RECOMMENDATIONS)
-      .map(({ recommendationScore: _score, ...issue }) => issue),
+    issues: issues.map(toPublicRecommendation),
     failedRepositories,
     source: {
       ...trending.source,
@@ -281,7 +376,9 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
     throw new Error(rateLimited ? "GITHUB_RATE_LIMIT" : "GITHUB_FETCH_FAILED");
   }
 
-  const value = buildPayload(successfulLists, failedRepositories, trending, repositories);
+  const issues = interleaveIssues(successfulLists);
+  const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken);
+  const value = buildPayload(enrichedIssues, failedRepositories, trending, repositories);
   latestResponse = { value, cachedAt: Date.now() };
   return value;
 };

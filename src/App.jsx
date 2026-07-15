@@ -1511,6 +1511,11 @@ export default function App() {
                       </a>
                       <span>{formatGithubDate(issueData.createdAt)} 작성</span>
                       <span>댓글 {issueData.comments}개</span>
+                      <span title="GitHub 이슈 타임라인에서 확인한 연관 PR 수">
+                        {Number.isInteger(issueData.relatedPullRequestCount)
+                          ? `연관 PR ${issueData.relatedPullRequestCount}${issueData.relatedPullRequestCountTruncated ? "+" : ""}개`
+                          : "연관 PR 확인 불가"}
+                      </span>
                     </div>
 
                     <div

@@ -121,6 +121,11 @@ export const IssueRecommendationGrid = ({
             {issue.trendingRank && <span>Trending #{issue.trendingRank}</span>}
             <span>{formatGithubDate(issue.updatedAt)} 업데이트</span>
             <span>댓글 {issue.comments}개</span>
+            <span title="GitHub 이슈 타임라인에서 확인한 연관 PR 수">
+              {Number.isInteger(issue.relatedPullRequestCount)
+                ? `연관 PR ${issue.relatedPullRequestCount}${issue.relatedPullRequestCountTruncated ? "+" : ""}개`
+                : "연관 PR 확인 불가"}
+            </span>
           </div>
         </div>
 
