@@ -40,8 +40,10 @@ const normalizeImportedIssue = ({ issue, repository }) => {
     author: issue.author || { login: "unknown", avatarUrl: "", url: issue.url },
     assignees: Array.isArray(issue.assignees) ? issue.assignees : [],
     comments: issue.commentCount || 0,
-    relatedPullRequestCount: null,
-    relatedPullRequestCountTruncated: false,
+    relatedPullRequestCount: Number.isInteger(issue.relatedPullRequestCount)
+      ? issue.relatedPullRequestCount
+      : null,
+    relatedPullRequestCountTruncated: !!issue.relatedPullRequestCountTruncated,
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
     closedAt: issue.closedAt,

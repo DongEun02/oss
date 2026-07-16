@@ -1,4 +1,4 @@
-const CACHE_KEY = "oss:github-recommendations:v5";
+const CACHE_KEY = "oss:github-recommendations:v6";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const readCache = () => {

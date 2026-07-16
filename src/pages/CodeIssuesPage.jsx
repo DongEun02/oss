@@ -89,6 +89,10 @@ export function CodeIssuesPage() {
     && issueData?.repo === routeRepository
     && Number(issueData.number) === numericIssueNumber
     && isGithubIssue;
+  const relatedPullRequestCount = Number.isInteger(issueData?.relatedPullRequestCount)
+    ? issueData.relatedPullRequestCount
+    : null;
+  const hasRelatedPullRequests = relatedPullRequestCount !== null && relatedPullRequestCount > 0;
 
   useEffect(() => {
     if (!isDetailRoute) return;
@@ -195,31 +199,37 @@ export function CodeIssuesPage() {
             </div>
 
             <div
-              className={`issue-assignment-status ${issueAssignees.length > 0 ? "issue-assignment-status-assigned" : "issue-assignment-status-available"}`}
+              className={`issue-assignment-status ${issueAssignees.length > 0 || hasRelatedPullRequests ? "issue-assignment-status-assigned" : "issue-assignment-status-available"}`}
               role="status"
             >
-              {issueAssignees.length > 0 ? (
+              {issueAssignees.length > 0 || hasRelatedPullRequests ? (
                 <>
                   <Icons.Alert className="w-4 h-4 shrink-0" />
                   <div className="issue-assignment-copy">
-                    <strong>담당자 {issueAssignees.length}명이 지정되어 있습니다.</strong>
-                    <span>이미 작업 중일 수 있으니 중복 기여 여부를 먼저 확인하세요.</span>
+                    <strong>
+                      {issueAssignees.length > 0
+                        ? `담당자 ${issueAssignees.length}명이 지정되어 있습니다.`
+                        : `연관 Pull Request ${relatedPullRequestCount}개가 있습니다.`}
+                    </strong>
+                    <span>이미 작업 중일 수 있으니 GitHub에서 진행 상황을 먼저 확인하세요.</span>
                   </div>
-                  <div className="issue-assignment-people" aria-label="지정된 담당자">
-                    {issueAssignees.map(assignee => (
-                      <a
-                        key={assignee.login}
-                        href={assignee.html_url || `https://github.com/${assignee.login}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {(assignee.avatar_url || assignee.avatarUrl) && (
-                          <img src={assignee.avatar_url || assignee.avatarUrl} alt="" />
-                        )}
-                        {assignee.login}
-                      </a>
-                    ))}
-                  </div>
+                  {issueAssignees.length > 0 && (
+                    <div className="issue-assignment-people" aria-label="지정된 담당자">
+                      {issueAssignees.map(assignee => (
+                        <a
+                          key={assignee.login}
+                          href={assignee.html_url || `https://github.com/${assignee.login}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {(assignee.avatar_url || assignee.avatarUrl) && (
+                            <img src={assignee.avatar_url || assignee.avatarUrl} alt="" />
+                          )}
+                          {assignee.login}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
@@ -393,7 +403,7 @@ export function CodeIssuesPage() {
             {featureRecommendationsLoading && (
               <div className="recommendation-status" role="status">
                 <span className="recommendation-status-spinner" aria-hidden="true" />
-                <div><strong>실제 GitHub 이슈를 확인하고 있습니다.</strong><span>열린 이슈와 저장소 라벨을 기준으로 추천 목록을 구성합니다.</span></div>
+                <div><strong>실제 GitHub 이슈를 확인하고 있습니다.</strong><span>담당자와 연관 Pull Request가 없는 열린 이슈만 선별합니다.</span></div>
               </div>
             )}
             {featureRecommendationsError && !featureRecommendationsLoading && (
@@ -419,7 +429,7 @@ export function CodeIssuesPage() {
           <div className="space-y-5">
             <section className="issue-import-panel" aria-labelledby="repository-search-heading">
               <h3 id="repository-search-heading">저장소 추천 이슈 찾기</h3>
-              <p>GitHub의 <code>owner/repository</code> 이름을 입력하면 기여하기 적합한 열린 이슈를 선별합니다.</p>
+              <p>GitHub의 <code>owner/repository</code> 이름을 입력하면 담당자와 연관 Pull Request가 없는 열린 이슈를 선별합니다.</p>
               <form className="issue-import-form" onSubmit={loadRepositoryRecommendations}>
                 <div className="issue-import-input-wrap">
                   <Icons.Github className="w-4 h-4" />

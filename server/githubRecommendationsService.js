@@ -4,39 +4,18 @@ import {
   fetchRepositoryContributorFriendliness,
   parseRepositoryName
 } from "./githubRepositoryService.js";
+import {
+  enrichRelatedPullRequestCounts,
+  isUnclaimedIssue
+} from "./githubIssueAvailabilityService.js";
 
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const ISSUES_PER_REPOSITORY = 3;
+const ISSUE_CANDIDATES_PER_REPOSITORY = 12;
 const REPOSITORIES_PER_REQUEST = 8;
 const MAX_RECOMMENDATIONS = 18;
-const RELATED_PRS_PER_ISSUE = 100;
 let latestResponse = null;
 const repositoryResponseCache = new Map();
-
-const RELATED_PULL_REQUESTS_QUERY = `
-  query RelatedPullRequests($ids: [ID!]!) {
-    nodes(ids: $ids) {
-      ... on Issue {
-        id
-        timelineItems(first: ${RELATED_PRS_PER_ISSUE}, itemTypes: [CROSS_REFERENCED_EVENT]) {
-          nodes {
-            ... on CrossReferencedEvent {
-              source {
-                __typename
-                ... on PullRequest {
-                  id
-                }
-              }
-            }
-          }
-          pageInfo {
-            hasNextPage
-          }
-        }
-      }
-    }
-  }
-`;
 
 const DIFFICULTY_PATTERNS = [
   {
@@ -205,67 +184,12 @@ const recommendationScore = issue => {
   if (issue.difficultyLevel === "starter") score += 120;
   if (labels.some(label => /help wanted|contributions welcome|accepting prs/.test(label))) score += 70;
   if (issue.difficultyLevel === "medium") score += 35;
-  if (issue.assignees.length === 0) score += 20;
   if (issue.body.length >= 300) score += 15;
   if (issue.comments <= 15) score += 8;
 
   const ageInDays = Math.max(0, (Date.now() - new Date(issue.updatedAt).getTime()) / 86_400_000);
   score += Math.max(0, 30 - Math.floor(ageInDays / 7));
   return score;
-};
-
-const relatedPullRequestResult = node => {
-  const pullRequestIds = (node?.timelineItems?.nodes || [])
-    .map(event => event?.source)
-    .filter(source => source?.__typename === "PullRequest" && source.id)
-    .map(pullRequest => pullRequest.id);
-
-  return {
-    count: new Set(pullRequestIds).size,
-    truncated: !!node?.timelineItems?.pageInfo?.hasNextPage
-  };
-};
-
-const enrichRelatedPullRequestCounts = async (issues, githubToken) => {
-  if (!githubToken || issues.length === 0) return issues;
-
-  const nodeIds = [...new Set(issues.map(issue => issue.githubNodeId).filter(Boolean))];
-  if (nodeIds.length === 0) return issues;
-
-  try {
-    const response = await fetch("https://api.github.com/graphql", {
-      method: "POST",
-      headers: {
-        ...githubHeaders(githubToken),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        query: RELATED_PULL_REQUESTS_QUERY,
-        variables: { ids: nodeIds }
-      }),
-      signal: AbortSignal.timeout(20_000)
-    });
-    if (!response.ok) return issues;
-
-    const payload = await response.json();
-    const countsByNodeId = new Map(
-      (payload.data?.nodes || [])
-        .filter(node => node?.id)
-        .map(node => [node.id, relatedPullRequestResult(node)])
-    );
-
-    return issues.map(issue => {
-      const relatedPullRequests = countsByNodeId.get(issue.githubNodeId);
-      if (!relatedPullRequests) return issue;
-      return {
-        ...issue,
-        relatedPullRequestCount: relatedPullRequests.count,
-        relatedPullRequestCountTruncated: relatedPullRequests.truncated
-      };
-    });
-  } catch {
-    return issues;
-  }
 };
 
 const toPublicRecommendation = issue => {
@@ -340,6 +264,7 @@ const toRecommendation = (rawIssue, repository, source = "github-recommendation"
 
 const isUsableIssue = issue => {
   if (!issue || issue.pull_request || issue.state !== "open" || issue.locked) return false;
+  if ((issue.assignees?.length || 0) > 0) return false;
   if ((issue.title || "").trim().length < 12) return false;
   if (plainTextFromMarkdown(issue.body).length < 80) return false;
   const labelNames = normalizeLabels(issue.labels).map(label => label.name).join(" ");
@@ -381,12 +306,15 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
   if (!repository.hasIssues) throw new Error("REPOSITORY_ISSUES_UNAVAILABLE");
   const [issues, contributorFriendliness] = await Promise.all([
     fetchRepositoryIssues(repository, githubToken, {
-      limit: MAX_RECOMMENDATIONS,
+      limit: 50,
       source: "github-repository"
     }),
     fetchRepositoryContributorFriendliness(repository, githubToken)
   ]);
-  const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken);
+  const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken, { required: true });
+  const availableIssues = enrichedIssues
+    .filter(isUnclaimedIssue)
+    .slice(0, MAX_RECOMMENDATIONS);
   const repositoryWithHealth = {
     ...repository,
     developmentActivity: repository.activity,
@@ -395,7 +323,7 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
   const loadedAtMs = Date.now();
   const value = {
     repository: repositoryWithHealth,
-    issues: enrichedIssues.map(toPublicRecommendation),
+    issues: availableIssues.map(toPublicRecommendation),
     source: {
       name: "GitHub Repository",
       repository: repository.fullName,
@@ -448,7 +376,9 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
   if (repositories.length === 0) throw new Error("GITHUB_FETCH_FAILED");
 
   const results = await Promise.allSettled(
-    repositories.map(repository => fetchRepositoryIssues(repository, githubToken))
+    repositories.map(repository => fetchRepositoryIssues(repository, githubToken, {
+      limit: ISSUE_CANDIDATES_PER_REPOSITORY
+    }))
   );
   const successfulLists = results
     .filter(result => result.status === "fulfilled")
@@ -471,9 +401,17 @@ const fetchRecommendedIssues = async ({ githubToken, force }) => {
     throw new Error(rateLimited ? "GITHUB_RATE_LIMIT" : "GITHUB_FETCH_FAILED");
   }
 
-  const issues = interleaveIssues(successfulLists);
-  const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken);
-  const value = buildPayload(enrichedIssues, failedRepositories, trending, repositories);
+  const enrichedIssues = await enrichRelatedPullRequestCounts(successfulLists.flat(), githubToken, { required: true });
+  const availableIssuesByRepository = new Map();
+  enrichedIssues.filter(isUnclaimedIssue).forEach(issue => {
+    const repositoryIssues = availableIssuesByRepository.get(issue.repo) || [];
+    if (repositoryIssues.length < ISSUES_PER_REPOSITORY) repositoryIssues.push(issue);
+    availableIssuesByRepository.set(issue.repo, repositoryIssues);
+  });
+  const issues = interleaveIssues(
+    successfulLists.map(list => availableIssuesByRepository.get(list[0]?.repo) || [])
+  );
+  const value = buildPayload(issues, failedRepositories, trending, repositories);
   latestResponse = { value, cachedAt: Date.now() };
   return value;
 };
@@ -489,6 +427,8 @@ const errorMessage = error => {
   }
   if (message === "REPOSITORY_INACTIVE") return [422, "보관되었거나 비활성화된 저장소입니다."];
   if (message === "GITHUB_RATE_LIMIT") return [429, "GitHub API 요청 한도에 도달했습니다."];
+  if (message === "GITHUB_TOKEN_REQUIRED") return [503, "추천 가능한 이슈를 검증하려면 GitHub API 토큰이 필요합니다."];
+  if (message === "GITHUB_RELATED_PRS_UNAVAILABLE") return [502, "이슈에 연결된 Pull Request를 확인하지 못했습니다."];
   if (error?.name === "TimeoutError" || /timeout/i.test(message)) {
     return [504, "GitHub 이슈 조회 시간이 초과됐습니다."];
   }

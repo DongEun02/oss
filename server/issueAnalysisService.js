@@ -1,5 +1,6 @@
 import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient.js";
 import { fetchOpenSourceRepository } from "./githubRepositoryService.js";
+import { enrichRelatedPullRequestCounts } from "./githubIssueAvailabilityService.js";
 
 const cache = new Map();
 const inFlight = new Map();
@@ -151,6 +152,9 @@ const fetchGithubIssue = async (issue, githubToken) => {
       url: data.user?.html_url || data.html_url
     },
     assignees: data.assignees || [],
+    relatedPullRequestCount: null,
+    relatedPullRequestCountTruncated: false,
+    githubNodeId: data.node_id || "",
     commentCount: data.comments || 0,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
@@ -327,7 +331,8 @@ export const handleGithubIssueRequest = async (request, response, options = {}) 
   try {
     const repository = await fetchVerifiedRepository(parsedIssue, githubToken);
     const issue = await fetchGithubIssue(parsedIssue, githubToken);
-    jsonResponse(response, 200, { issue, repository });
+    const [issueWithPullRequests] = await enrichRelatedPullRequestCounts([issue], githubToken);
+    jsonResponse(response, 200, { issue: issueWithPullRequests, repository });
   } catch (error) {
     const [status, message] = errorMessage(error);
     console.error(`[GitHub issue] ${status}: ${message}`);
