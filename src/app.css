@@ -2766,11 +2766,24 @@ body {
   font-size: 9px;
 }
 
+.repository-search-summary-main {
+  min-width: 0;
+}
+
+.repository-contributor-evidence {
+  overflow: hidden;
+  color: #5f6368 !important;
+  font-size: 10px !important;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .repository-search-summary-side {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 7px;
+  gap: 9px;
 }
 
 .repository-search-summary-side > strong {
@@ -2779,42 +2792,70 @@ body {
   white-space: nowrap;
 }
 
-.repository-activity {
-  display: inline-flex !important;
+.repository-health-list {
+  display: grid;
+  gap: 5px;
+  min-width: 166px;
+}
+
+.repository-health-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.repository-health-list > div > span {
+  margin: 0;
+  color: #777777;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.repository-health-status {
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin: 0 !important;
-  color: #666666 !important;
-  font-size: 10px !important;
+  color: #666666;
+  font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.repository-activity i {
+.repository-health-status i {
   width: 7px;
   height: 7px;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: #8c959f;
 }
 
-.repository-activity-active {
-  color: #1a7f37 !important;
+.repository-health-active,
+.repository-health-friendly {
+  color: #1a7f37;
 }
 
-.repository-activity-active i {
+.repository-health-active i,
+.repository-health-friendly i {
   background: #1a7f37;
 }
 
-.repository-activity-steady {
-  color: #9a6700 !important;
+.repository-health-steady,
+.repository-health-mixed {
+  color: #9a6700;
 }
 
-.repository-activity-steady i {
+.repository-health-steady i,
+.repository-health-mixed i {
   background: #bf8700;
 }
 
-.repository-activity-quiet i {
-  background: #8c959f;
+.repository-health-low {
+  color: #cf222e;
+}
+
+.repository-health-low i {
+  background: #cf222e;
 }
 
 .issue-contribution-guide-link {
@@ -5036,7 +5077,13 @@ body {
 
   .repository-search-summary-side {
     grid-column: 2;
+    width: 100%;
     align-items: flex-start;
+  }
+
+  .repository-health-list {
+    width: 100%;
+    max-width: 220px;
   }
 
   .imported-issue-header,

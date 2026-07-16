@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/translations/:path*", "destination": "/index.html" },
+    { "source": "/issues/:path*", "destination": "/index.html" },
+    { "source": "/guides/:path*", "destination": "/index.html" },
+    { "source": "/mypage", "destination": "/index.html" }
+  ]
+}

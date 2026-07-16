@@ -1,5 +1,9 @@
 import { getMonthlyTrendingRepositories } from "./trendingRepositoriesService.js";
-import { fetchOpenSourceRepository, parseRepositoryName } from "./githubRepositoryService.js";
+import {
+  fetchOpenSourceRepository,
+  fetchRepositoryContributorFriendliness,
+  parseRepositoryName
+} from "./githubRepositoryService.js";
 
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const ISSUES_PER_REPOSITORY = 3;
@@ -375,14 +379,22 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }) => {
 
   const repository = await fetchOpenSourceRepository(fullName, githubToken);
   if (!repository.hasIssues) throw new Error("REPOSITORY_ISSUES_UNAVAILABLE");
-  const issues = await fetchRepositoryIssues(repository, githubToken, {
-    limit: MAX_RECOMMENDATIONS,
-    source: "github-repository"
-  });
+  const [issues, contributorFriendliness] = await Promise.all([
+    fetchRepositoryIssues(repository, githubToken, {
+      limit: MAX_RECOMMENDATIONS,
+      source: "github-repository"
+    }),
+    fetchRepositoryContributorFriendliness(repository, githubToken)
+  ]);
   const enrichedIssues = await enrichRelatedPullRequestCounts(issues, githubToken);
+  const repositoryWithHealth = {
+    ...repository,
+    developmentActivity: repository.activity,
+    contributorFriendliness
+  };
   const loadedAtMs = Date.now();
   const value = {
-    repository,
+    repository: repositoryWithHealth,
     issues: enrichedIssues.map(toPublicRecommendation),
     source: {
       name: "GitHub Repository",
