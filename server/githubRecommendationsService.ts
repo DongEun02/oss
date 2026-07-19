@@ -1,13 +1,13 @@
-import { getMonthlyTrendingRepositories } from "./trendingRepositoriesService";
+import { getMonthlyTrendingRepositories } from "./trendingRepositoriesService.js";
 import {
   fetchOpenSourceRepository,
   fetchRepositoryContributorFriendliness,
   parseRepositoryName
-} from "./githubRepositoryService";
+} from "./githubRepositoryService.js";
 import {
   enrichRelatedPullRequestCounts,
   isUnclaimedIssue
-} from "./githubIssueAvailabilityService";
+} from "./githubIssueAvailabilityService.js";
 
 type HandlerOptions = {
   githubToken?: string;

@@ -1,8 +1,8 @@
 import {
   TRANSLATION_PROJECTS,
   getGithubDocumentUrl
-} from "../shared/translationSources";
-import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient";
+} from "../shared/translationSources.js";
+import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient.js";
 
 type HandlerOptions = {
   apiKey?: string;

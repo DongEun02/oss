@@ -1,11 +1,11 @@
-import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./issueAnalysisService";
+import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./issueAnalysisService.js";
 import {
   handleRecommendedIssuesRequest,
   handleRepositoryIssuesRequest
-} from "./githubRecommendationsService";
-import { handleTranslationStatusRequest } from "./translationStatusService";
-import { handleContributionGuideRequest } from "./contributionGuideService";
-import { handleTrendingRepositoriesRequest } from "./trendingRepositoriesService";
+} from "./githubRecommendationsService.js";
+import { handleTranslationStatusRequest } from "./translationStatusService.js";
+import { handleContributionGuideRequest } from "./contributionGuideService.js";
+import { handleTrendingRepositoriesRequest } from "./trendingRepositoriesService.js";
 
 export const localApiPlugin = (options: any) => ({
   name: "oss-local-api",

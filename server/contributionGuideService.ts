@@ -1,5 +1,5 @@
-import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient";
-import { fetchOpenSourceRepository, parseRepositoryName } from "./githubRepositoryService";
+import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient.js";
+import { fetchOpenSourceRepository, parseRepositoryName } from "./githubRepositoryService.js";
 
 type HandlerOptions = {
   apiKey?: string;

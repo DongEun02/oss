@@ -1,6 +1,6 @@
-import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient";
-import { fetchOpenSourceRepository } from "./githubRepositoryService";
-import { enrichRelatedPullRequestCounts } from "./githubIssueAvailabilityService";
+import { DEFAULT_NVIDIA_MODEL, generateNvidiaJson } from "./nvidiaClient.js";
+import { fetchOpenSourceRepository } from "./githubRepositoryService.js";
+import { enrichRelatedPullRequestCounts } from "./githubIssueAvailabilityService.js";
 
 type AnalysisHandlerOptions = {
   apiKey?: string;
