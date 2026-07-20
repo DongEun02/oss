@@ -13,6 +13,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { TranslationPage } from "./pages/TranslationPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { fetchContributionGuide } from "./services/contributionGuide";
+import { initializeAnalytics, trackAnalyticsEvent } from "./services/analytics";
 import { fetchGithubIssueByUrl } from "./services/githubIssue";
 import { fetchRecommendedIssues } from "./services/githubRecommendations";
 import { fetchRepositoryIssues } from "./services/repositoryIssues";
@@ -43,7 +44,10 @@ export default function App() {
     guide: "/guides",
     mypage: "/mypage"
   };
-  const setView = (nextView: any) => navigate(routeForView[nextView] || "/");
+  const setView = (nextView: any) => {
+    trackAnalyticsEvent("navigation_click", { destination: nextView });
+    navigate(routeForView[nextView] || "/");
+  };
   const [myPageStatus, setMyPageStatus] = useState('interested');
 
   const [selectedRepo, setSelectedRepo] = useState('react');
@@ -69,6 +73,10 @@ export default function App() {
     failedProjects: [] as Array<{ key: string; name: string }>
   });
   const handledTranslationRefresh = useRef(0);
+
+  useEffect(() => {
+    initializeAnalytics();
+  }, []);
 
   const [issueData, setIssueData] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState("All");
@@ -318,6 +326,10 @@ export default function App() {
   }, [view, translationLanguage, translationStatusRefreshVersion]);
 
   const refreshTranslationStatuses = () => {
+    trackAnalyticsEvent("content_refresh", {
+      content_type: "translation",
+      language: translationLanguage
+    });
     clearTranslationStatusCache(translationLanguage);
     setTranslationProjects({});
     setTranslationStatuses({});
@@ -343,6 +355,11 @@ export default function App() {
   };
 
   const toggleTaskInterest = (task: any, kind: any) => {
+    trackAnalyticsEvent("interest_toggle", {
+      content_type: kind,
+      item_id: task.id,
+      action: trackedTasks[task.id] ? "remove" : "add"
+    });
     setTrackedTasks(previousItems => {
       if (previousItems[task.id]) {
         const updatedItems = { ...previousItems };
@@ -594,6 +611,12 @@ export default function App() {
   };
 
   const openIssueDetail = (issue: any) => {
+    trackAnalyticsEvent("select_content", {
+      content_type: "issue",
+      item_id: `${issue.repo}#${issue.number}`,
+      repository: issue.repo,
+      source: issue.source
+    });
     setIssueData(issue);
     setCodexAnalysis(issue.codexAnalysis || null);
     setCodexAnalysisError("");

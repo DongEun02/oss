@@ -4,6 +4,7 @@ import { useOssApp } from "../app/OssAppContext";
 import { Icons } from "../components/Icons";
 import { LanguageFilterBar } from "../components/LanguageFilterBar";
 import { formatGithubDate, getRepoVisual } from "../data/content";
+import { trackAnalyticsEvent } from "../services/analytics";
 
 export function TranslationPage() {
   const navigate = useNavigate();
@@ -111,7 +112,16 @@ export function TranslationPage() {
 
           <div className="filter-panel p-3 space-y-2">
             <span className="text-[10px] font-bold text-[#57606a] uppercase tracking-wider">언어 필터</span>
-            <LanguageFilterBar selectedLanguage={translationLanguage} onChange={setTranslationLanguage} />
+            <LanguageFilterBar
+              selectedLanguage={translationLanguage}
+              onChange={(language: string) => {
+                trackAnalyticsEvent("language_filter_select", {
+                  content_type: "translation",
+                  language
+                });
+                setTranslationLanguage(language);
+              }}
+            />
             <p className="text-[11px] text-[#6e7781]">언어를 선택하면 검증된 한국어 번역 저장소에서 최근 변경된 문서를 탐색합니다.</p>
           </div>
 
@@ -170,7 +180,16 @@ export function TranslationPage() {
                       <div>
                         <strong>{project.name}</strong>
                         <span>최근 변경 문서 {project.checkedDocumentCount}개 확인</span>
-                        <a href={project.contributionGuideUrl} target="_blank" rel="noreferrer">기여 안내 보기</a>
+                        <a
+                          href={project.contributionGuideUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => trackAnalyticsEvent("contribution_guide_click", {
+                            project_key: project.key
+                          })}
+                        >
+                          기여 안내 보기
+                        </a>
                       </div>
                       <em className={project.actionableCount > 0 ? "is-actionable" : project.reviewCount > 0 ? "is-review" : ""}>
                         {project.actionableCount > 0
@@ -195,7 +214,15 @@ export function TranslationPage() {
                   type="button"
                   className="contribution-card-link"
                   aria-label={`${task.title} 상세 보기`}
-                  onClick={() => navigate(`/translations/${task.repoKey}/${task.docId}`)}
+                  onClick={() => {
+                    trackAnalyticsEvent("select_content", {
+                      content_type: "translation",
+                      item_id: task.id,
+                      project_key: task.repoKey,
+                      language: translationLanguage
+                    });
+                    navigate(`/translations/${task.repoKey}/${task.docId}`);
+                  }}
                 />
                 <div
                   className="contribution-cover"
@@ -301,7 +328,15 @@ export function TranslationPage() {
                     <button
                       type="button"
                       key={document.id}
-                      onClick={() => navigate(`/translations/${selectedRepo}/${document.id}`)}
+                      onClick={() => {
+                        trackAnalyticsEvent("select_content", {
+                          content_type: "translation_document",
+                          item_id: `${selectedRepo}/${document.id}`,
+                          project_key: selectedRepo,
+                          language: translationLanguage
+                        });
+                        navigate(`/translations/${selectedRepo}/${document.id}`);
+                      }}
                       className={`w-full text-left px-3.5 py-3 rounded-md border transition-all ${
                         selectedDocId === document.id
                           ? "bg-white border-[#d0d7de] ring-1 ring-[#3f6fd9] shadow-sm"
@@ -364,7 +399,16 @@ export function TranslationPage() {
                     )}
 
                     <div className="translation-source-list">
-                      <a href={selectedTranslationStatus.source.url} target="_blank" rel="noreferrer">
+                      <a
+                        href={selectedTranslationStatus.source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => trackAnalyticsEvent("document_source_click", {
+                          source_type: "english",
+                          project_key: selectedRepo,
+                          document_id: selectedDocId
+                        })}
+                      >
                         <div>
                           <span>영문 원문</span>
                           <strong>{selectedTranslationStatus.source.repo}</strong>
@@ -373,7 +417,16 @@ export function TranslationPage() {
                         <em>{formatGithubDate(selectedTranslationStatus.source.committedAt)} · {selectedTranslationStatus.source.commitSha.slice(0, 7)}</em>
                         <Icons.ArrowRight className="w-3.5 h-3.5" />
                       </a>
-                      <a href={selectedTranslationStatus.translation.url} target="_blank" rel="noreferrer">
+                      <a
+                        href={selectedTranslationStatus.translation.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => trackAnalyticsEvent("document_source_click", {
+                          source_type: "korean",
+                          project_key: selectedRepo,
+                          document_id: selectedDocId
+                        })}
+                      >
                         <div>
                           <span>{selectedTranslationStatus.translation.exists ? "한국어 번역본" : "생성할 한국어 문서"}</span>
                           <strong>{selectedTranslationStatus.translation.repo}</strong>
