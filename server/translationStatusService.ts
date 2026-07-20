@@ -213,11 +213,17 @@ const mappingForPath = (
 ) => mappings.find(mapping => (
   (language === "All" || mapping.languageTags.includes(language))
   && (path === mapping.sourceRoot || path.startsWith(`${mapping.sourceRoot}/`))
+  && (!mapping.sourcePaths || mapping.sourcePaths.includes(path))
   && hasSupportedExtension(path, mapping.sourceExtensions)
 ));
 
 const toTranslationPath = (sourcePath: string, mapping: TranslationPathMapping) => {
-  const relativePath = sourcePath.slice(mapping.sourceRoot.length).replace(/^\//, "");
+  const explicitTranslationPath = mapping.translationPathMap?.[sourcePath];
+  if (explicitTranslationPath) return explicitTranslationPath;
+
+  const relativePath = mapping.flattenTranslationPaths
+    ? sourcePath.split("/").at(-1) || sourcePath
+    : sourcePath.slice(mapping.sourceRoot.length).replace(/^\//, "");
   const mappedPath = `${mapping.translationRoot}/${relativePath}`.replace(/\/{2,}/g, "/");
   if (!mapping.translationExtension) return mappedPath;
   const sourceExtension = mapping.sourceExtensions.find(extension => mappedPath.endsWith(extension));

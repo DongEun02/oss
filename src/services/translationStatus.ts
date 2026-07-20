@@ -1,4 +1,4 @@
-const CACHE_KEY_PREFIX = "oss:translation-status:v2";
+const CACHE_KEY_PREFIX = "oss:translation-status:v3";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
 const cacheKey = (language: string) => `${CACHE_KEY_PREFIX}:${language}`;

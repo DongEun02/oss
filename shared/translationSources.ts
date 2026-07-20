@@ -23,6 +23,9 @@ export type TranslationPathMapping = {
   sourceRoot: string;
   translationRoot: string;
   sourceExtensions: string[];
+  sourcePaths?: string[];
+  flattenTranslationPaths?: boolean;
+  translationPathMap?: Record<string, string>;
   translationExtension?: string;
   languageTags: string[];
 };
@@ -152,6 +155,163 @@ export const TRANSLATION_PROJECTS: Record<string, TranslationProject> = {
         sourceExtensions: [".rst"],
         translationExtension: ".po",
         languageTags: ["Python"]
+      }]
+    }
+  },
+  adkJava: {
+    name: "Google ADK Java 한국어 문서",
+    description: "Google ADK 공식 Java 시작 문서와 커뮤니티 한국어 번역본의 변경 상태를 비교합니다.",
+    languageTags: ["Java"],
+    techStack: ["Google ADK", "Java", "Documentation"],
+    contributionGuideUrl: "https://github.com/adk-labs/adk-docs/blob/main/CONTRIBUTING.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "google/adk-docs", branch: "main" },
+      translation: { repo: "adk-labs/adk-docs", branch: "main" },
+      sourceScanRoot: "docs/get-started/java.md",
+      mappings: [{
+        sourceRoot: "docs/get-started",
+        translationRoot: "docs/ko/get-started",
+        sourceExtensions: [".md"],
+        sourcePaths: ["docs/get-started/java.md"],
+        languageTags: ["Java"]
+      }]
+    }
+  },
+  mybatis: {
+    name: "MyBatis 한국어 문서",
+    description: "MyBatis 공식 Java 문서와 같은 저장소에서 관리되는 공식 한국어 번역본의 변경 상태를 비교합니다.",
+    languageTags: ["Java"],
+    techStack: ["MyBatis", "Java", "SQL Mapper"],
+    contributionGuideUrl: "https://github.com/mybatis/mybatis-3/blob/master/CONTRIBUTING.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "mybatis/mybatis-3", branch: "master" },
+      translation: { repo: "mybatis/mybatis-3", branch: "master" },
+      sourceScanRoot: "src/site/markdown",
+      mappings: [
+        {
+          sourceRoot: "src/site/markdown",
+          translationRoot: "src/site/ko/markdown",
+          sourceExtensions: [".md"],
+          sourcePaths: [
+            "src/site/markdown/getting-started.md",
+            "src/site/markdown/index.md",
+            "src/site/markdown/logging.md"
+          ],
+          languageTags: ["Java"]
+        },
+        {
+          sourceRoot: "src/site/markdown",
+          translationRoot: "src/site/ko/xdoc",
+          sourceExtensions: [".md"],
+          sourcePaths: [
+            "src/site/markdown/configuration.md",
+            "src/site/markdown/dynamic-sql.md",
+            "src/site/markdown/java-api.md",
+            "src/site/markdown/sqlmap-xml.md",
+            "src/site/markdown/statement-builders.md"
+          ],
+          translationExtension: ".xml",
+          languageTags: ["Java"]
+        }
+      ]
+    }
+  },
+  adkKotlin: {
+    name: "Google ADK Kotlin 한국어 문서",
+    description: "Google ADK 공식 Kotlin 시작 문서와 커뮤니티 한국어 번역본의 변경 상태를 비교합니다.",
+    languageTags: ["Kotlin"],
+    techStack: ["Google ADK", "Kotlin", "Documentation"],
+    contributionGuideUrl: "https://github.com/adk-labs/adk-docs/blob/main/CONTRIBUTING.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "google/adk-docs", branch: "main" },
+      translation: { repo: "adk-labs/adk-docs", branch: "main" },
+      sourceScanRoot: "docs/get-started/kotlin.md",
+      mappings: [{
+        sourceRoot: "docs/get-started",
+        translationRoot: "docs/ko/get-started",
+        sourceExtensions: [".md"],
+        sourcePaths: ["docs/get-started/kotlin.md"],
+        languageTags: ["Kotlin"]
+      }]
+    }
+  },
+  kotlin: {
+    name: "Kotlin 한국어 문서",
+    description: "Kotlin 공식 영문 문서와 최근까지 관리된 비공식 한국어 번역본의 변경 상태를 비교합니다.",
+    languageTags: ["Kotlin"],
+    techStack: ["Kotlin", "Documentation"],
+    contributionGuideUrl: "https://github.com/hoonkun/kotlin-docs-kr/blob/main/README.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "JetBrains/kotlin-web-site", branch: "master" },
+      translation: { repo: "hoonkun/kotlin-docs-kr", branch: "main" },
+      sourceScanRoot: "docs/topics",
+      mappings: [{
+        sourceRoot: "docs/topics",
+        translationRoot: "docs",
+        sourceExtensions: [".md"],
+        flattenTranslationPaths: true,
+        languageTags: ["Kotlin"]
+      }]
+    }
+  },
+  kotlinCoroutines: {
+    name: "Kotlin Coroutines 한국어 문서",
+    description: "kotlinx.coroutines 공식 라이브러리 가이드와 커뮤니티 한국어 번역본의 변경 상태를 비교합니다.",
+    languageTags: ["Kotlin"],
+    techStack: ["Kotlin Coroutines", "Kotlin", "Library"],
+    contributionGuideUrl: "https://github.com/hoonkun/kotlin-docs-kr/blob/main/README.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "Kotlin/kotlinx.coroutines", branch: "master" },
+      translation: { repo: "hoonkun/kotlin-docs-kr", branch: "main" },
+      sourceScanRoot: "docs/topics",
+      mappings: [{
+        sourceRoot: "docs/topics",
+        translationRoot: "docs",
+        sourceExtensions: [".md"],
+        sourcePaths: [
+          "docs/topics/cancellation-and-timeouts.md",
+          "docs/topics/channels.md",
+          "docs/topics/composing-suspending-functions.md",
+          "docs/topics/coroutine-context-and-dispatchers.md",
+          "docs/topics/coroutines-basics.md",
+          "docs/topics/coroutines-flow.md",
+          "docs/topics/coroutines-guide.md",
+          "docs/topics/exception-handling.md",
+          "docs/topics/shared-mutable-state-and-concurrency.md"
+        ],
+        flattenTranslationPaths: true,
+        translationPathMap: {
+          "docs/topics/coroutines-flow.md": "docs/flow.md"
+        },
+        languageTags: ["Kotlin"]
+      }]
+    }
+  },
+  coil: {
+    name: "Coil 한국어 문서",
+    description: "Android와 Compose용 이미지 라이브러리 Coil의 공식 README와 저장소 내 한국어 번역본을 비교합니다.",
+    languageTags: ["Kotlin"],
+    techStack: ["Android", "Coil", "Compose"],
+    contributionGuideUrl: "https://github.com/coil-kt/coil/blob/main/.github/ISSUE_TEMPLATE/CONTRIBUTING.md",
+    discovery: {
+      kind: "paired-documents",
+      source: { repo: "coil-kt/coil", branch: "main" },
+      translation: { repo: "coil-kt/coil", branch: "main" },
+      sourceScanRoot: "README.md",
+      mappings: [{
+        sourceRoot: "README.md",
+        translationRoot: "",
+        sourceExtensions: [".md"],
+        sourcePaths: ["README.md"],
+        translationPathMap: {
+          "README.md": "README-ko.md"
+        },
+        languageTags: ["Kotlin"]
       }]
     }
   },

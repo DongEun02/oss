@@ -365,6 +365,12 @@ export const REPO_VISUALS: Record<string, { image: string; background: string }>
   "MDN 한국어 문서": { image: "https://github.com/mdn.png?size=320", background: "#f2f4fb" },
   "Vue 한국어 문서": { image: "https://github.com/vuejs.png?size=320", background: "#edf8f3" },
   "Python 한국어 문서": { image: "https://github.com/python.png?size=320", background: "#fff8e8" },
+  "Google ADK Java 한국어 문서": { image: "https://github.com/google.png?size=320", background: "#eef3ff" },
+  "MyBatis 한국어 문서": { image: "https://github.com/mybatis.png?size=320", background: "#fff4eb" },
+  "Google ADK Kotlin 한국어 문서": { image: "https://github.com/google.png?size=320", background: "#f3efff" },
+  "Kotlin 한국어 문서": { image: "https://github.com/JetBrains.png?size=320", background: "#f7efff" },
+  "Kotlin Coroutines 한국어 문서": { image: "https://github.com/Kotlin.png?size=320", background: "#f1f0ff" },
+  "Coil 한국어 문서": { image: "https://github.com/coil-kt.png?size=320", background: "#edf7ff" },
   "Rust Book 한국어 문서": { image: "https://github.com/rust-lang.png?size=320", background: "#f8f1eb" }
 };
 
