@@ -50,7 +50,10 @@ export const fetchContributionGuide = async (
   try {
     data = await requestContributionGuide(fullName, signal);
   } catch (error) {
-    if (signal?.aborted || !Number.isInteger(error.status) || error.status < 500) throw error;
+    const status = error instanceof Error && "status" in error && typeof error.status === "number"
+      ? error.status
+      : null;
+    if (signal?.aborted || status === null || !Number.isInteger(status) || status < 500) throw error;
     await new Promise(resolve => setTimeout(resolve, 700));
     if (signal?.aborted) throw error;
     data = await requestContributionGuide(fullName, signal);

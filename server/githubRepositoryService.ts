@@ -204,7 +204,11 @@ export const summarizeContributorFriendliness = (
     if (!responseDataAvailable) return [];
     const createdAtMs = Date.parse(pullRequest.createdAt || "");
     const responseAtMs = firstMaintainerResponseAt(pullRequest);
-    if (!Number.isFinite(createdAtMs) || !Number.isFinite(responseAtMs)) return [];
+    if (
+      !Number.isFinite(createdAtMs)
+      || typeof responseAtMs !== "number"
+      || !Number.isFinite(responseAtMs)
+    ) return [];
     return [Math.max(0, (responseAtMs - createdAtMs) / (60 * 60 * 1000))];
   });
   const mergedPullRequestCount = recentExternalPullRequests.filter(

@@ -491,7 +491,8 @@ export const handleRecommendedIssuesRequest = async (request: any, response: any
     const result = await fetchRecommendedIssues({ githubToken, force });
     jsonResponse(response, 200, result);
   } catch (error) {
-    if (latestResponse && ["GITHUB_RATE_LIMIT", "GITHUB_FETCH_FAILED"].includes(String(error?.message || ""))) {
+    const caughtMessage = error instanceof Error ? error.message : "";
+    if (latestResponse && ["GITHUB_RATE_LIMIT", "GITHUB_FETCH_FAILED"].includes(caughtMessage)) {
       jsonResponse(response, 200, {
         ...latestResponse.value,
         cached: true,

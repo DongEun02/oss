@@ -9,7 +9,9 @@ const extractJsonObject = (value: any) => {
   if (!content) throw new Error("NVIDIA_EMPTY_RESPONSE");
 
   const fencedMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidates = [fencedMatch?.[1], content].filter(Boolean);
+  const candidates = [fencedMatch?.[1], content].filter(
+    (candidate): candidate is string => typeof candidate === "string" && candidate.length > 0
+  );
   const firstBrace = content.indexOf("{");
   const lastBrace = content.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -90,7 +92,7 @@ export const generateNvidiaJson = async ({
     const data = await response.json();
     return extractJsonObject(data?.choices?.[0]?.message?.content);
   } catch (error) {
-    if (error?.name === "AbortError") throw new Error("NVIDIA_TIMEOUT");
+    if (error instanceof Error && error.name === "AbortError") throw new Error("NVIDIA_TIMEOUT");
     throw error;
   } finally {
     clearTimeout(timeout);

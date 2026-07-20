@@ -78,29 +78,29 @@ export default function App() {
     initializeAnalytics();
   }, []);
 
-  const [issueData, setIssueData] = useState(null);
+  const [issueData, setIssueData] = useState<any>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState("All");
   const [selectedIssueType, setSelectedIssueType] = useState("All");
   const [featureRepoSearch, setFeatureRepoSearch] = useState("");
   const [featureRepoLanguage, setFeatureRepoLanguage] = useState("All");
   const [featureSourceMode, setFeatureSourceMode] = useState('recommended'); // 'recommended' | 'repository' | 'issue-url'
   const [repositoryQuery, setRepositoryQuery] = useState("");
-  const [repositoryIssues, setRepositoryIssues] = useState([]);
-  const [repositoryIssueResult, setRepositoryIssueResult] = useState(null);
+  const [repositoryIssues, setRepositoryIssues] = useState<any[]>([]);
+  const [repositoryIssueResult, setRepositoryIssueResult] = useState<any>(null);
   const [repositoryIssuesLoading, setRepositoryIssuesLoading] = useState(false);
   const [repositoryIssuesError, setRepositoryIssuesError] = useState("");
   const [issueUrlQuery, setIssueUrlQuery] = useState("");
   const [issueUrlLoading, setIssueUrlLoading] = useState(false);
   const [issueUrlError, setIssueUrlError] = useState("");
-  const [codexAnalysis, setCodexAnalysis] = useState(null);
+  const [codexAnalysis, setCodexAnalysis] = useState<any>(null);
   const [codexAnalysisLoading, setCodexAnalysisLoading] = useState(false);
   const [codexAnalysisError, setCodexAnalysisError] = useState("");
-  const [featureIssues, setFeatureIssues] = useState([]);
+  const [featureIssues, setFeatureIssues] = useState<any[]>([]);
   const [featureRecommendationsLoading, setFeatureRecommendationsLoading] = useState(false);
   const [featureRecommendationsLoaded, setFeatureRecommendationsLoaded] = useState(false);
   const [featureRecommendationsError, setFeatureRecommendationsError] = useState("");
   const [featureRecommendationsLoadedAt, setFeatureRecommendationsLoadedAt] = useState("");
-  const [featureRecommendationFailures, setFeatureRecommendationFailures] = useState([]);
+  const [featureRecommendationFailures, setFeatureRecommendationFailures] = useState<any[]>([]);
   const [recommendationRefreshVersion, setRecommendationRefreshVersion] = useState(0);
 
   // Guide Explorer States (New Page)
@@ -108,11 +108,11 @@ export default function App() {
   const [guideRepoKey, setGuideRepoKey] = useState('');
   const [guideSearchQuery, setGuideSearchQuery] = useState("");
   const [guideRepositoryQuery, setGuideRepositoryQuery] = useState("");
-  const [guideRepositoryResult, setGuideRepositoryResult] = useState(null);
+  const [guideRepositoryResult, setGuideRepositoryResult] = useState<any>(null);
   const [guideRepositorySearchLoading, setGuideRepositorySearchLoading] = useState(false);
   const [guideRepositorySearchError, setGuideRepositorySearchError] = useState("");
   const [guideCompletedChecklist, setGuideCompletedChecklist] = usePersistentState("oss:guide-checklist:v1", {});
-  const [guideRepositories, setGuideRepositories] = useState([]);
+  const [guideRepositories, setGuideRepositories] = useState<any[]>([]);
   const [guideRepositoriesLoading, setGuideRepositoriesLoading] = useState(false);
   const [guideRepositoriesLoaded, setGuideRepositoriesLoaded] = useState(false);
   const [guideRepositoriesError, setGuideRepositoriesError] = useState("");
@@ -551,7 +551,7 @@ export default function App() {
       setCodexAnalysisError(
         isNetworkError
           ? "분석 서버에 연결할 수 없습니다. 개발 서버 상태를 확인해 주세요."
-          : error.message
+          : error instanceof Error ? error.message : "이슈 분석 중 알 수 없는 오류가 발생했습니다."
       );
     } finally {
       setCodexAnalysisLoading(false);

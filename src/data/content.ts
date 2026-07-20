@@ -416,9 +416,10 @@ export const sanitizeGithubHtml = (html: any) => {
     });
 
     ['href', 'src'].forEach(attributeName => {
-      if (!node.hasAttribute(attributeName)) return;
+      const attributeValue = node.getAttribute(attributeName);
+      if (!attributeValue) return;
       try {
-        const target = new URL(node.getAttribute(attributeName), 'https://github.com');
+        const target = new URL(attributeValue, 'https://github.com');
         if (target.protocol !== 'https:') node.removeAttribute(attributeName);
         else node.setAttribute(attributeName, target.href);
       } catch {
