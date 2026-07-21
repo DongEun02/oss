@@ -116,7 +116,7 @@ const getRequestUrl = (request: any) => new URL(request.url || "/", "http://127.
 const githubHeaders = (githubToken?: string) => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "oss-translation-status",
+    "User-Agent": "giyeoro-translation-status",
     "X-GitHub-Api-Version": "2022-11-28"
   };
   if (githubToken) headers.Authorization = `Bearer ${githubToken}`;

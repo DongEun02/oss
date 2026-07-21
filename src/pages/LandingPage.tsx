@@ -83,7 +83,7 @@ export function LandingPage() {
 
         <div className="landing-intro-content">
           <h1>
-            OSS에서 첫 오픈소스 기여를<br />
+            기여로에서 첫 오픈소스 기여를<br />
             시작하세요.
           </h1>
           <p className="landing-intro-copy">

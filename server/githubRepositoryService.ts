@@ -76,7 +76,7 @@ const repositoryActivity = (pushedAt: any) => {
 const githubHeaders = (githubToken: any) => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "oss-repository-lookup",
+    "User-Agent": "giyeoro-repository-lookup",
     "X-GitHub-Api-Version": "2022-11-28"
   };
   if (githubToken) headers.Authorization = `Bearer ${githubToken}`;

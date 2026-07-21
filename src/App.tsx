@@ -148,7 +148,7 @@ export default function App() {
     }
     favicon.type = 'image/svg+xml';
     favicon.href = SITE_ICON_DATA_URL;
-    document.title = 'OSS';
+    document.title = '기여로 | 첫 오픈소스 기여 찾기';
   }, []);
 
   useEffect(() => {
@@ -852,7 +852,7 @@ export default function App() {
             <button type="button" className="app-brand flex items-center gap-3" onClick={() => setView("landing")}>
               <span className="brand-mark"><BrandMark /></span>
               <span className="flex items-center gap-2">
-                <span className="brand-name font-bold text-[#1f2933] text-sm tracking-tight">OSS</span>
+                <span className="brand-name font-bold text-[#1f2933] text-sm tracking-tight">기여로</span>
                 <span className="preview-badge text-[10px] font-semibold px-2 py-0.5 rounded-full">Preview</span>
               </span>
             </button>
@@ -891,7 +891,7 @@ export default function App() {
             <div className="app-footer-top">
               <div className="app-footer-brand">
                 <span className="brand-mark"><BrandMark /></span>
-                <strong>OSS</strong>
+                <strong>기여로</strong>
               </div>
               <div className="app-footer-links">
                 <a href="#">서비스 소개</a>
@@ -900,7 +900,7 @@ export default function App() {
                 <a href="#">문의하기</a>
               </div>
             </div>
-            <p>오픈소스 첫 기여를 찾고 준비하는 작업 공간입니다. © 2026 OSS</p>
+            <p>오픈소스 첫 기여로 가는 가장 쉬운 길. © 2026 기여로</p>
           </div>
         </footer>
       </div>

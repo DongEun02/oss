@@ -29,7 +29,7 @@ const githubHeaders = (githubToken: any) => ({
   Accept: "application/vnd.github+json",
   Authorization: `Bearer ${githubToken}`,
   "Content-Type": "application/json",
-  "User-Agent": "oss-issue-availability",
+  "User-Agent": "giyeoro-issue-availability",
   "X-GitHub-Api-Version": "2022-11-28"
 });
 

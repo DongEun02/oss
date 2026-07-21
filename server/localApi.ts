@@ -7,7 +7,7 @@ import { handleTranslationStatusRequest } from "./translationStatusService.js";
 import { handleContributionGuideRequest } from "./contributionGuideService.js";
 
 export const localApiPlugin = (options: any) => ({
-  name: "oss-local-api",
+  name: "giyeoro-local-api",
   configureServer(server: any) {
     server.middlewares.use("/api/analyze-issue", (request: any, response: any) => (
       handleAnalyzeIssueRequest(request, response, {

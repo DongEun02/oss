@@ -37,7 +37,7 @@ export const MyPage = ({
   return (
     <div className="mypage animate-fade-in">
       <header className="mypage-heading">
-        <span>My OSS</span>
+        <span>기여로 작업실</span>
         <h1>내 기여 현황</h1>
         <p>관심 있는 작업을 저장하고 기여 진행 상태를 한곳에서 관리합니다.</p>
       </header>

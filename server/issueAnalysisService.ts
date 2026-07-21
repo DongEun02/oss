@@ -127,7 +127,7 @@ const getRequestUrl = (request: any) => new URL(request.url || "/", "http://127.
 const fetchGithubIssue = async (issue: any, githubToken: any) => {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "oss-issue-analyzer",
+    "User-Agent": "giyeoro-issue-analyzer",
     "X-GitHub-Api-Version": "2022-11-28"
   };
   if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
