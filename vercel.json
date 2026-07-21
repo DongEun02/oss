@@ -4,5 +4,19 @@
     { "source": "/issues/:path*", "destination": "/index.html" },
     { "source": "/guides/:path*", "destination": "/index.html" },
     { "source": "/mypage", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/mypage",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/api/:path*",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    }
   ]
 }

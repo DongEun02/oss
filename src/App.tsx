@@ -20,6 +20,7 @@ import { fetchAuthSession, getGithubLoginUrl, logoutGithub } from "./services/au
 import type { AuthUser } from "./services/auth";
 import { fetchGithubIssueByUrl } from "./services/githubIssue";
 import { fetchRepositoryIssues } from "./services/repositoryIssues";
+import { updateSeoMetadata } from "./services/seo";
 import {
   clearTranslationStatusCache,
   fetchTranslationStatuses,
@@ -248,8 +249,11 @@ export default function App() {
     }
     favicon.type = 'image/svg+xml';
     favicon.href = SITE_ICON_DATA_URL;
-    document.title = '기여로 | 첫 오픈소스 기여 찾기';
   }, []);
+
+  useEffect(() => {
+    updateSeoMetadata(location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (
