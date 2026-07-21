@@ -124,8 +124,6 @@ const loadContributionGuide = async (fullName: any, options: any) => {
       description: repository.description,
       language: repository.language,
       license: repository.license,
-      trendingRank: repository.trendingRank,
-      starsThisMonth: repository.starsThisMonth,
       ownerAvatarUrl: repository.ownerAvatarUrl,
       url: repository.url,
       contributionGuideUrl: repository.contributionGuideUrl

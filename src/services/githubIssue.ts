@@ -35,8 +35,6 @@ const normalizeImportedIssue = ({ issue, repository }: any) => {
     labels,
     repositoryAvatarUrl: repository?.ownerAvatarUrl || fallbackRepositoryAvatar(issue.repository),
     contributionGuideUrl: repository?.contributionGuideUrl || "",
-    trendingRank: null as number | null,
-    starsThisMonth: 0,
     author: issue.author || { login: "unknown", avatarUrl: "", url: issue.url },
     assignees: Array.isArray(issue.assignees) ? issue.assignees : [],
     comments: issue.commentCount || 0,

@@ -1,11 +1,7 @@
 import { handleAnalyzeIssueRequest, handleGithubIssueRequest } from "./issueAnalysisService.js";
-import {
-  handleRecommendedIssuesRequest,
-  handleRepositoryIssuesRequest
-} from "./githubRecommendationsService.js";
+import { handleRepositoryIssuesRequest } from "./githubRecommendationsService.js";
 import { handleTranslationStatusRequest } from "./translationStatusService.js";
 import { handleContributionGuideRequest } from "./contributionGuideService.js";
-import { handleTrendingRepositoriesRequest } from "./trendingRepositoriesService.js";
 
 export const localApiPlugin = (options: any) => ({
   name: "oss-local-api",
@@ -28,20 +24,8 @@ export const localApiPlugin = (options: any) => ({
         enforceLoopback: true
       })
     ));
-    server.middlewares.use("/api/recommended-issues", (request: any, response: any) => (
-      handleRecommendedIssuesRequest(request, response, {
-        ...options,
-        enforceLoopback: true
-      })
-    ));
     server.middlewares.use("/api/repository-issues", (request: any, response: any) => (
       handleRepositoryIssuesRequest(request, response, {
-        ...options,
-        enforceLoopback: true
-      })
-    ));
-    server.middlewares.use("/api/trending-repositories", (request: any, response: any) => (
-      handleTrendingRepositoriesRequest(request, response, {
         ...options,
         enforceLoopback: true
       })

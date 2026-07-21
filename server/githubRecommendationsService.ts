@@ -1,4 +1,3 @@
-import { getMonthlyTrendingRepositories } from "./trendingRepositoriesService.js";
 import {
   fetchOpenSourceRepository,
   fetchRepositoryContributorFriendliness,
@@ -15,11 +14,7 @@ type HandlerOptions = {
 };
 
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
-const ISSUES_PER_REPOSITORY = 3;
-const ISSUE_CANDIDATES_PER_REPOSITORY = 12;
-const REPOSITORIES_PER_REQUEST = 8;
 const MAX_RECOMMENDATIONS = 18;
-let latestResponse: { value: any; cachedAt: number } | null = null;
 const repositoryResponseCache = new Map();
 
 const DIFFICULTY_PATTERNS = [
@@ -246,8 +241,6 @@ const toRecommendation = (rawIssue: any, repository: any, source = "github-recom
     labels,
     repositoryAvatarUrl: repository.ownerAvatarUrl,
     contributionGuideUrl: repository.contributionGuideUrl,
-    trendingRank: repository.trendingRank,
-    starsThisMonth: repository.starsThisMonth,
     author: {
       login: rawIssue.user?.login || "unknown",
       avatarUrl: rawIssue.user?.avatar_url || "",
@@ -279,7 +272,7 @@ const isUsableIssue = (issue: any) => {
 const fetchRepositoryIssues = async (
   repository: any,
   githubToken: any,
-  { limit = ISSUES_PER_REPOSITORY, source = "github-recommendation" } = {}
+  { limit = MAX_RECOMMENDATIONS, source = "github-repository" } = {}
 ) => {
   const response = await fetch(
     `https://api.github.com/repos/${repository.fullName}/issues?state=open&sort=updated&direction=desc&per_page=50`,
@@ -342,85 +335,6 @@ const fetchRepositoryRecommendations = async ({ fullName, githubToken }: any) =>
   return value;
 };
 
-const interleaveIssues = (successfulLists: any) => {
-  const issues: any[] = [];
-  const largestListSize = Math.max(...successfulLists.map((list: any) => list.length), 0);
-  for (let index = 0; index < largestListSize; index += 1) {
-    successfulLists.forEach((list: any) => {
-      if (list[index]) issues.push(list[index]);
-    });
-  }
-
-  return issues.slice(0, MAX_RECOMMENDATIONS);
-};
-
-const buildPayload = (issues: any, failedRepositories: any, trending: any, repositories: any) => {
-  const loadedAtMs = Date.now();
-  return {
-    issues: issues.map(toPublicRecommendation),
-    failedRepositories,
-    source: {
-      ...trending.source,
-      repositoryCount: repositories.length
-    },
-    loadedAt: new Date(loadedAtMs).toISOString(),
-    loadedAtMs,
-    cached: false
-  };
-};
-
-const fetchRecommendedIssues = async ({ githubToken, force }: any) => {
-  if (!force && latestResponse && Date.now() - latestResponse.cachedAt < RESPONSE_CACHE_TTL_MS) {
-    return { ...latestResponse.value, cached: true };
-  }
-
-  const trending = await getMonthlyTrendingRepositories({ githubToken });
-  const repositories = trending.repositories
-    .filter((repository: any) => repository.openIssues > 0)
-    .slice(0, REPOSITORIES_PER_REQUEST);
-  if (repositories.length === 0) throw new Error("GITHUB_FETCH_FAILED");
-
-  const results = await Promise.allSettled(
-    repositories.map((repository: any) => fetchRepositoryIssues(repository, githubToken, {
-      limit: ISSUE_CANDIDATES_PER_REPOSITORY
-    }))
-  );
-  const successfulLists = results
-    .filter(result => result.status === "fulfilled")
-    .map(result => result.value);
-  const failedRepositories = results.flatMap((result, index) => (
-    result.status === "rejected"
-      ? [{
-          repository: repositories[index].fullName,
-          message: result.reason?.message === "GITHUB_RATE_LIMIT"
-            ? "GitHub API 요청 한도에 도달했습니다."
-            : "이슈를 불러오지 못했습니다."
-        }]
-      : []
-  ));
-
-  if (successfulLists.length === 0) {
-    const rateLimited = results.some(result => (
-      result.status === "rejected" && result.reason?.message === "GITHUB_RATE_LIMIT"
-    ));
-    throw new Error(rateLimited ? "GITHUB_RATE_LIMIT" : "GITHUB_FETCH_FAILED");
-  }
-
-  const enrichedIssues = await enrichRelatedPullRequestCounts(successfulLists.flat(), githubToken, { required: true });
-  const availableIssuesByRepository = new Map();
-  enrichedIssues.filter(isUnclaimedIssue).forEach((issue: any) => {
-    const repositoryIssues = availableIssuesByRepository.get(issue.repo) || [];
-    if (repositoryIssues.length < ISSUES_PER_REPOSITORY) repositoryIssues.push(issue);
-    availableIssuesByRepository.set(issue.repo, repositoryIssues);
-  });
-  const issues = interleaveIssues(
-    successfulLists.map(list => availableIssuesByRepository.get(list[0]?.repo) || [])
-  );
-  const value = buildPayload(issues, failedRepositories, trending, repositories);
-  latestResponse = { value, cachedAt: Date.now() };
-  return value;
-};
-
 const errorMessage = (error: any) => {
   const message = String(error?.message || "");
   if (message === "GITHUB_REPOSITORY_NOT_FOUND") return [404, "GitHub 저장소를 찾을 수 없습니다."];
@@ -467,41 +381,6 @@ export const handleRepositoryIssuesRequest = async (request: any, response: any,
   } catch (error) {
     const [status, message] = errorMessage(error);
     console.error(`[GitHub repository recommendations] ${status}: ${message}`);
-    jsonResponse(response, status, { error: message });
-  }
-};
-
-export const handleRecommendedIssuesRequest = async (request: any, response: any, options: HandlerOptions = {}) => {
-  const {
-    githubToken = process.env.GITHUB_TOKEN,
-    enforceLoopback = false
-  } = options;
-
-  if (enforceLoopback && !isLoopbackRequest(request)) {
-    jsonResponse(response, 403, { error: "로컬 요청만 허용됩니다." });
-    return;
-  }
-  if (request.method !== "GET") {
-    jsonResponse(response, 405, { error: "GET 요청만 지원합니다." });
-    return;
-  }
-
-  try {
-    const force = getRequestUrl(request).searchParams.get("refresh") === "1";
-    const result = await fetchRecommendedIssues({ githubToken, force });
-    jsonResponse(response, 200, result);
-  } catch (error) {
-    const caughtMessage = error instanceof Error ? error.message : "";
-    if (latestResponse && ["GITHUB_RATE_LIMIT", "GITHUB_FETCH_FAILED"].includes(caughtMessage)) {
-      jsonResponse(response, 200, {
-        ...latestResponse.value,
-        cached: true,
-        stale: true
-      });
-      return;
-    }
-    const [status, message] = errorMessage(error);
-    console.error(`[GitHub recommendations] ${status}: ${message}`);
     jsonResponse(response, status, { error: message });
   }
 };

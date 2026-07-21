@@ -123,7 +123,6 @@ export const IssueRecommendationGrid = ({
             ))}
           </div>
           <div className="contribution-live-meta">
-            {issue.trendingRank && <span>Trending #{issue.trendingRank}</span>}
             <span>{formatGithubDate(issue.updatedAt)} 업데이트</span>
             <span>댓글 {issue.comments}개</span>
             <span title="GitHub 이슈 타임라인에서 확인한 연관 PR 수">

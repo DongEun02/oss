@@ -15,9 +15,7 @@ import { WorkspacePage } from "./pages/WorkspacePage";
 import { fetchContributionGuide } from "./services/contributionGuide";
 import { initializeAnalytics, trackAnalyticsEvent } from "./services/analytics";
 import { fetchGithubIssueByUrl } from "./services/githubIssue";
-import { fetchRecommendedIssues } from "./services/githubRecommendations";
 import { fetchRepositoryIssues } from "./services/repositoryIssues";
-import { fetchTrendingRepositories } from "./services/trendingRepositories";
 import {
   clearTranslationStatusCache,
   fetchTranslationStatuses,
@@ -83,7 +81,7 @@ export default function App() {
   const [selectedIssueType, setSelectedIssueType] = useState("All");
   const [featureRepoSearch, setFeatureRepoSearch] = useState("");
   const [featureRepoLanguage, setFeatureRepoLanguage] = useState("All");
-  const [featureSourceMode, setFeatureSourceMode] = useState('recommended'); // 'recommended' | 'repository' | 'issue-url'
+  const [featureSourceMode, setFeatureSourceMode] = useState('repository'); // 'repository' | 'issue-url'
   const [repositoryQuery, setRepositoryQuery] = useState("");
   const [repositoryIssues, setRepositoryIssues] = useState<any[]>([]);
   const [repositoryIssueResult, setRepositoryIssueResult] = useState<any>(null);
@@ -95,27 +93,14 @@ export default function App() {
   const [codexAnalysis, setCodexAnalysis] = useState<any>(null);
   const [codexAnalysisLoading, setCodexAnalysisLoading] = useState(false);
   const [codexAnalysisError, setCodexAnalysisError] = useState("");
-  const [featureIssues, setFeatureIssues] = useState<any[]>([]);
-  const [featureRecommendationsLoading, setFeatureRecommendationsLoading] = useState(false);
-  const [featureRecommendationsLoaded, setFeatureRecommendationsLoaded] = useState(false);
-  const [featureRecommendationsError, setFeatureRecommendationsError] = useState("");
-  const [featureRecommendationsLoadedAt, setFeatureRecommendationsLoadedAt] = useState("");
-  const [featureRecommendationFailures, setFeatureRecommendationFailures] = useState<any[]>([]);
-  const [recommendationRefreshVersion, setRecommendationRefreshVersion] = useState(0);
 
   // Guide Explorer States (New Page)
-  const [guideSourceMode, setGuideSourceMode] = useState('trending'); // 'trending' | 'repository'
   const [guideRepoKey, setGuideRepoKey] = useState('');
-  const [guideSearchQuery, setGuideSearchQuery] = useState("");
   const [guideRepositoryQuery, setGuideRepositoryQuery] = useState("");
   const [guideRepositoryResult, setGuideRepositoryResult] = useState<any>(null);
   const [guideRepositorySearchLoading, setGuideRepositorySearchLoading] = useState(false);
   const [guideRepositorySearchError, setGuideRepositorySearchError] = useState("");
   const [guideCompletedChecklist, setGuideCompletedChecklist] = usePersistentState("oss:guide-checklist:v1", {});
-  const [guideRepositories, setGuideRepositories] = useState<any[]>([]);
-  const [guideRepositoriesLoading, setGuideRepositoriesLoading] = useState(false);
-  const [guideRepositoriesLoaded, setGuideRepositoriesLoaded] = useState(false);
-  const [guideRepositoriesError, setGuideRepositoriesError] = useState("");
   const [guideDetails, setGuideDetails] = useState<Record<string, any>>({});
   const [guideDetailLoading, setGuideDetailLoading] = useState(false);
   const [guideDetailError, setGuideDetailError] = useState("");
@@ -151,90 +136,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (view !== 'feature' || featureSourceMode !== 'recommended' || featureRecommendationsLoaded) return undefined;
-
-    const controller = new AbortController();
-    const requestTimeout = setTimeout(() => controller.abort(), 45_000);
-    let active = true;
-    setFeatureRecommendationsLoading(true);
-    setFeatureRecommendationsError("");
-    setFeatureRecommendationFailures([]);
-
-    fetchRecommendedIssues({
-      force: recommendationRefreshVersion > 0,
-      signal: controller.signal
-    })
-      .then(result => {
-        if (!active) return;
-        clearTimeout(requestTimeout);
-        setFeatureIssues(result.issues);
-        setFeatureRecommendationFailures(result.failedRepositories);
-        setFeatureRecommendationsLoadedAt(result.loadedAt);
-        setFeatureRecommendationsLoading(false);
-        setFeatureRecommendationsLoaded(true);
-      })
-      .catch(error => {
-        if (!active) return;
-        clearTimeout(requestTimeout);
-        setFeatureRecommendationsError(
-          error?.name === 'AbortError'
-            ? "추천 이슈를 불러오는 시간이 초과됐습니다."
-            : error?.message || "GitHub 추천 이슈를 불러오지 못했습니다."
-        );
-        setFeatureRecommendationsLoading(false);
-        setFeatureRecommendationsLoaded(true);
-      });
-
-    return () => {
-      active = false;
-      clearTimeout(requestTimeout);
-      controller.abort();
-    };
-  }, [view, featureSourceMode, recommendationRefreshVersion]);
-
-  useEffect(() => {
-    if (view !== 'guide' || guideSourceMode !== 'trending' || guideRepositoriesLoaded) return undefined;
-
-    const controller = new AbortController();
-    const requestTimeout = setTimeout(() => controller.abort(), 45_000);
-    let active = true;
-    setGuideRepositoriesLoading(true);
-    setGuideRepositoriesError("");
-
-    fetchTrendingRepositories({ signal: controller.signal })
-      .then(result => {
-        if (!active) return;
-        clearTimeout(requestTimeout);
-        const repositoriesWithGuides = result.repositories.filter((repo: any) => repo.contributionGuideUrl);
-        setGuideRepositories(repositoriesWithGuides);
-        setGuideRepoKey(currentKey => (
-          repositoriesWithGuides.some((repo: any) => repo.fullName === currentKey)
-            ? currentKey
-            : repositoriesWithGuides[0]?.fullName || ""
-        ));
-        setGuideRepositoriesLoading(false);
-        setGuideRepositoriesLoaded(true);
-      })
-      .catch(error => {
-        if (!active) return;
-        clearTimeout(requestTimeout);
-        setGuideRepositoriesError(
-          error?.name === 'AbortError'
-            ? "월간 Trending 저장소를 불러오는 시간이 초과됐습니다."
-            : error?.message || "월간 Trending 저장소를 불러오지 못했습니다."
-        );
-        setGuideRepositoriesLoading(false);
-        setGuideRepositoriesLoaded(true);
-      });
-
-    return () => {
-      active = false;
-      clearTimeout(requestTimeout);
-      controller.abort();
-    };
-  }, [view, guideSourceMode, guideRepositoriesLoaded]);
-
-  useEffect(() => {
     if (view !== 'guide' || !guideRepoKey || guideDetails[guideRepoKey]) return undefined;
 
     const controller = new AbortController();
@@ -248,7 +149,7 @@ export default function App() {
         if (!active) return;
         clearTimeout(requestTimeout);
         setGuideDetails(current => ({ ...current, [guideRepoKey]: result }));
-        if (guideSourceMode === 'repository') setGuideRepositoryResult(result);
+        setGuideRepositoryResult(result);
         setGuideDetailError("");
         setGuideDetailLoading(false);
       })
@@ -268,7 +169,7 @@ export default function App() {
       clearTimeout(requestTimeout);
       controller.abort();
     };
-  }, [view, guideSourceMode, guideRepoKey, guideDetailRefreshVersion]);
+  }, [view, guideRepoKey, guideDetailRefreshVersion]);
 
   useEffect(() => {
     if (view !== 'translation') return undefined;
@@ -415,11 +316,9 @@ export default function App() {
   };
 
   const openTranslatedGuide = (repoName: any) => {
-    setGuideSourceMode('repository');
     setGuideRepositoryQuery(repoName || "");
     setGuideRepositoryResult(null);
     setGuideRepoKey(repoName || "");
-    setGuideSearchQuery("");
     setGuideRepositorySearchError("");
     setGuideDetailError("");
     navigate(repoName ? `/guides/${repoName}` : "/guides");
@@ -456,13 +355,6 @@ export default function App() {
     } finally {
       setGuideRepositorySearchLoading(false);
     }
-  };
-
-  const refreshFeatureRecommendations = () => {
-    setFeatureRecommendationsLoaded(false);
-    setFeatureRecommendationsError("");
-    setFeatureIssues([]);
-    setRecommendationRefreshVersion(version => version + 1);
   };
 
   const resetFeatureIssueFilters = () => {
@@ -516,11 +408,6 @@ export default function App() {
           ? { ...currentIssue, ...translatedIssueFields }
           : currentIssue
       ));
-      setFeatureIssues(currentIssues => currentIssues.map(issue => (
-        issue.url === targetUrl
-          ? { ...issue, ...translatedIssueFields }
-          : issue
-      )));
       setRepositoryIssues(currentIssues => currentIssues.map(issue => (
         issue.url === targetUrl
           ? { ...issue, ...translatedIssueFields }
@@ -576,9 +463,7 @@ export default function App() {
     setIssueData(savedIssue);
     setCodexAnalysis(savedIssue.codexAnalysis || null);
     setCodexAnalysisError("");
-    setFeatureSourceMode(savedIssue.source === 'github-import'
-      ? 'issue-url'
-      : savedIssue.source === 'github-repository' ? 'repository' : 'recommended');
+    setFeatureSourceMode(savedIssue.source === 'github-import' ? 'issue-url' : 'repository');
     navigate(`/issues/${savedIssue.repo}/${savedIssue.number}`);
     if (!savedIssue.codexAnalysis) void analyzeIssueWithCodex(savedIssue.url);
   };
@@ -693,9 +578,7 @@ export default function App() {
     return matchSearch && matchLanguage;
   });
 
-  const activeFeatureIssues = featureSourceMode === 'repository'
-    ? repositoryIssues
-    : featureSourceMode === 'recommended' ? featureIssues : [];
+  const activeFeatureIssues = featureSourceMode === 'repository' ? repositoryIssues : [];
   const filteredFeatureIssues = activeFeatureIssues.filter(issue => {
     const query = featureRepoSearch.trim().toLowerCase();
     const matchSearch = !query || [issue.repo, issue.title, issue.summary, issue.workType, issue.typeLabel]
@@ -706,12 +589,6 @@ export default function App() {
     return matchSearch && matchDifficulty && matchIssueType && matchLanguage;
   });
 
-  const filteredGuideRepos = guideRepositories.filter(repo => {
-    const query = guideSearchQuery.trim().toLowerCase();
-    return !query || [repo.fullName, repo.description, repo.language]
-      .some(value => String(value || "").toLowerCase().includes(query));
-  });
-  const selectedGuideRepository = guideRepositories.find(repo => repo.fullName === guideRepoKey);
   const selectedGuideResult = guideDetails[guideRepoKey];
   const featureLanguageOptions = [
     "All",
@@ -724,14 +601,6 @@ export default function App() {
     'github-recommendation',
     'github-repository'
   ].includes(issueData?.source);
-  const recommendationLoadedAtText = featureRecommendationsLoadedAt
-    ? new Intl.DateTimeFormat('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(new Date(featureRecommendationsLoadedAt))
-    : '';
   const translationStatusGeneratedAtText = translationStatusGeneratedAt
     ? new Intl.DateTimeFormat('ko-KR', {
         month: 'short',
@@ -809,11 +678,7 @@ export default function App() {
     codexAnalysis,
     codexAnalysisLoading,
     codexAnalysisError,
-    featureRecommendationsLoading,
-    featureRecommendationsError,
-    featureRecommendationFailures,
     openTranslatedGuide,
-    refreshFeatureRecommendations,
     resetFeatureIssueFilters,
     analyzeIssueWithCodex,
     loadRepositoryRecommendations,
@@ -823,14 +688,9 @@ export default function App() {
     filteredFeatureIssues,
     featureLanguageOptions,
     isGithubIssue,
-    recommendationLoadedAtText,
     issueAssignees,
-    guideSourceMode,
-    setGuideSourceMode,
     guideRepoKey,
     setGuideRepoKey,
-    guideSearchQuery,
-    setGuideSearchQuery,
     guideRepositoryQuery,
     setGuideRepositoryQuery,
     guideRepositoryResult,
@@ -839,11 +699,6 @@ export default function App() {
     setGuideRepositorySearchError,
     guideCompletedChecklist,
     setGuideCompletedChecklist,
-    guideRepositories,
-    guideRepositoriesLoading,
-    setGuideRepositoriesLoaded,
-    guideRepositoriesError,
-    setGuideRepositoriesError,
     guideDetailLoading,
     guideDetailError,
     setGuideDetailError,
@@ -851,8 +706,6 @@ export default function App() {
     triggerToast,
     handleCopyToClipboard,
     searchContributionGuide,
-    filteredGuideRepos,
-    selectedGuideRepository,
     selectedGuideResult
   };
 
@@ -878,13 +731,13 @@ export default function App() {
 
             <nav className="app-nav flex items-center gap-2" aria-label="주요 메뉴">
               <button type="button" onClick={() => setView("translation")} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "translation" ? "nav-button-active" : ""}`}>번역 기여</button>
-              <button type="button" onClick={() => { setFeatureSourceMode("recommended"); setView("feature"); }} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "feature" ? "nav-button-active" : ""}`}>코드 이슈</button>
+              <button type="button" onClick={() => { setFeatureSourceMode("repository"); setView("feature"); }} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "feature" ? "nav-button-active" : ""}`}>코드 이슈</button>
               <button type="button" onClick={() => setView("guide")} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "guide" ? "nav-button-active" : ""}`}>기여 가이드</button>
               <button type="button" onClick={() => setView("mypage")} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "mypage" ? "nav-button-active" : ""}`}>마이페이지</button>
             </nav>
 
             <div className="header-actions">
-              <button type="button" aria-label="코드 이슈 검색" onClick={() => { setFeatureSourceMode("recommended"); setView("feature"); }} className="header-search-button">
+              <button type="button" aria-label="코드 이슈 검색" onClick={() => { setFeatureSourceMode("repository"); setView("feature"); }} className="header-search-button">
                 <Icons.Search className="w-4 h-4" />
               </button>
               <button type="button" onClick={() => triggerToast("GitHub 로그인 연동은 준비 중입니다.")} className="header-login-button">GitHub 로그인</button>

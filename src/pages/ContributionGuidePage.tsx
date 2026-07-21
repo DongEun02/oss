@@ -1,19 +1,14 @@
 import { useEffect } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useOssApp } from "../app/OssAppContext";
 import { Icons } from "../components/Icons";
 
 export function ContributionGuidePage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { owner, repository } = useParams();
   const {
-    guideSourceMode,
-    setGuideSourceMode,
     guideRepoKey,
     setGuideRepoKey,
-    guideSearchQuery,
-    setGuideSearchQuery,
     guideRepositoryQuery,
     setGuideRepositoryQuery,
     guideRepositoryResult,
@@ -22,11 +17,6 @@ export function ContributionGuidePage() {
     setGuideRepositorySearchError,
     guideCompletedChecklist,
     setGuideCompletedChecklist,
-    guideRepositories,
-    guideRepositoriesLoading,
-    setGuideRepositoriesLoaded,
-    guideRepositoriesError,
-    setGuideRepositoriesError,
     guideDetailLoading,
     guideDetailError,
     setGuideDetailError,
@@ -34,41 +24,24 @@ export function ContributionGuidePage() {
     triggerToast,
     handleCopyToClipboard,
     searchContributionGuide,
-    filteredGuideRepos,
-    selectedGuideRepository,
     selectedGuideResult
   } = useOssApp();
   const routeRepository = owner && repository ? `${owner}/${repository}` : "";
 
   useEffect(() => {
     if (!routeRepository) return;
-    setGuideSourceMode(location.state?.source === "trending" ? "trending" : "repository");
     setGuideRepositoryQuery(routeRepository);
     setGuideRepoKey(routeRepository);
     setGuideRepositorySearchError("");
     setGuideDetailError("");
-  }, [location.state, routeRepository, setGuideDetailError, setGuideRepoKey, setGuideRepositoryQuery, setGuideRepositorySearchError, setGuideSourceMode]);
-
-  const selectTrendingRepository = (fullName: any) => {
-    setGuideSourceMode("trending");
-    setGuideRepoKey(fullName);
-    setGuideDetailError("");
-    navigate(`/guides/${fullName}`, { state: { source: "trending" } });
-  };
+  }, [routeRepository, setGuideDetailError, setGuideRepoKey, setGuideRepositoryQuery, setGuideRepositorySearchError]);
 
   const submitRepositorySearch = async (event: any) => {
     const result = await searchContributionGuide(event);
     if (result?.repository?.fullName) navigate(`/guides/${result.repository.fullName}`);
   };
 
-  const targetRepo = selectedGuideResult?.repository
-    ? {
-        ...selectedGuideRepository,
-        ...selectedGuideResult.repository,
-        trendingRank: selectedGuideRepository?.trendingRank
-          || selectedGuideResult.repository.trendingRank
-      }
-    : selectedGuideRepository;
+  const targetRepo = selectedGuideResult?.repository;
   const guide = selectedGuideResult?.guide;
 
   return (
@@ -76,119 +49,13 @@ export function ContributionGuidePage() {
       <div className="border-b border-[#d0d7de] pb-4">
         <h2 className="text-xl font-bold text-[#24292f]">기여 가이드</h2>
         <p className="text-xs text-[#57606a]">
-          <a
-            href="https://github.com/trending?since=monthly"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[#3f6fd9] font-semibold hover:underline"
-          >
-            GitHub 월간 Trending
-          </a>{" "}
-          오픈소스 목록을 살펴보거나 저장소 이름으로 <code className="bg-[#eaeef2] text-[#24292f] px-1.5 py-0.5 rounded font-mono text-[11px] border border-[#d0d7de]">CONTRIBUTING.md</code>를 직접 찾을 수 있습니다.
+          저장소 이름을 입력하면 공식 <code className="bg-[#eaeef2] text-[#24292f] px-1.5 py-0.5 rounded font-mono text-[11px] border border-[#d0d7de]">CONTRIBUTING.md</code>를 찾아 한국어로 정리합니다.
         </p>
-      </div>
-
-      <div className="feature-source-tabs" role="tablist" aria-label="기여 가이드 찾기 방식">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={guideSourceMode === "trending"}
-          onClick={() => {
-            setGuideSourceMode("trending");
-            setGuideRepositorySearchError("");
-            setGuideDetailError("");
-            const nextRepository = guideRepositories.some((item: any) => item.fullName === guideRepoKey)
-              ? guideRepoKey
-              : guideRepositories[0]?.fullName || "";
-            setGuideRepoKey(nextRepository);
-            navigate(nextRepository ? `/guides/${nextRepository}` : "/guides");
-          }}
-          className={`feature-source-tab ${guideSourceMode === "trending" ? "feature-source-tab-active" : ""}`}
-        >
-          월간 Trending
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={guideSourceMode === "repository"}
-          onClick={() => {
-            setGuideSourceMode("repository");
-            setGuideRepositorySearchError("");
-            setGuideDetailError("");
-            const resultName = guideRepositoryResult?.repository.fullName || routeRepository;
-            setGuideRepoKey(resultName || "");
-            navigate(resultName ? `/guides/${resultName}` : "/guides");
-          }}
-          className={`feature-source-tab ${guideSourceMode === "repository" ? "feature-source-tab-active" : ""}`}
-        >
-          저장소로 찾기
-        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-4 space-y-4">
-          {guideSourceMode === "trending" ? (
-            <div className="bg-white border border-[#d0d7de] rounded-md p-4 space-y-3 shadow-sm">
-              <div className="relative">
-                <span className="absolute inset-y-0 left-2.5 flex items-center text-slate-400">
-                  <Icons.Search className="w-3.5 h-3.5" />
-                </span>
-                <input
-                  type="text"
-                  value={guideSearchQuery}
-                  onChange={event => setGuideSearchQuery(event.target.value)}
-                  placeholder="레포지토리 검색..."
-                  className="w-full bg-[#f6f8fa] border border-[#d0d7de] focus:border-[#3f6fd9] focus:bg-white rounded-md pl-8 pr-3 py-1.5 text-xs text-[#24292f] outline-none"
-                />
-              </div>
-
-              <div className="divide-y divide-[#d0d7de] space-y-1">
-                {guideRepositoriesLoading && (
-                  <div className="py-8 text-center text-xs text-[#57606a]">월간 Trending 저장소를 확인하고 있습니다.</div>
-                )}
-                {guideRepositoriesError && !guideRepositoriesLoading && (
-                  <div className="py-5 text-center space-y-3">
-                    <p className="text-xs text-[#b42318]">{guideRepositoriesError}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGuideRepositoriesLoaded(false);
-                        setGuideRepositoriesError("");
-                      }}
-                      className="text-xs font-semibold text-[#3f6fd9] hover:underline"
-                    >
-                      다시 시도
-                    </button>
-                  </div>
-                )}
-                {!guideRepositoriesLoading && !guideRepositoriesError && filteredGuideRepos.map((repo: any) => (
-                  <button
-                    type="button"
-                    key={repo.fullName}
-                    onClick={() => selectTrendingRepository(repo.fullName)}
-                    className={`w-full text-left p-3 rounded-md transition-all flex items-center gap-3 ${
-                      guideRepoKey === repo.fullName
-                        ? "bg-[#eaeef2] text-slate-900 border border-[#d0d7de] shadow-sm font-semibold"
-                        : "text-[#57606a] hover:bg-[#f6f8fa]"
-                    }`}
-                  >
-                    <img src={repo.ownerAvatarUrl} alt="" className="w-8 h-8 rounded-md border border-[#d0d7de] shrink-0" />
-                    <span className="space-y-0.5 min-w-0 flex-1">
-                      <span className="text-xs block text-[#24292f] truncate">{repo.fullName}</span>
-                      <span className="text-[10px] text-[#57606a] block truncate">
-                        Trending #{repo.trendingRank} · {repo.language} · {repo.license?.id}
-                      </span>
-                    </span>
-                    <Icons.ArrowRight className="w-3 h-3 text-slate-400" />
-                  </button>
-                ))}
-                {!guideRepositoriesLoading && !guideRepositoriesError && filteredGuideRepos.length === 0 && (
-                  <div className="py-8 text-center text-xs text-[#57606a]">검색 결과가 없습니다.</div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <section className="guide-repository-search-panel" aria-labelledby="guide-repository-search-heading">
+          <section className="guide-repository-search-panel" aria-labelledby="guide-repository-search-heading">
               <h3 id="guide-repository-search-heading">저장소 기여 가이드 찾기</h3>
               <p><code>owner/repository</code> 이름으로 공식 기여 문서를 불러옵니다.</p>
 
@@ -235,12 +102,11 @@ export function ContributionGuidePage() {
                   </div>
                 </div>
               )}
-            </section>
-          )}
+          </section>
         </div>
 
         <div className="lg:col-span-8">
-          {((guideSourceMode === "trending" && guideRepositoriesLoading) || guideDetailLoading || guideRepositorySearchLoading) && (
+          {(guideDetailLoading || guideRepositorySearchLoading) && (
             <div className="bg-white border border-[#d0d7de] rounded-md p-10 text-center text-[#57606a] space-y-2">
               <span className="recommendation-status-spinner inline-block" aria-hidden="true" />
               <p className="text-xs">공식 기여 문서를 읽고 한국어로 정리하고 있습니다.</p>
@@ -265,9 +131,7 @@ export function ContributionGuidePage() {
 
           {!targetRepo && !guide && !guideDetailLoading && !guideRepositorySearchLoading && !guideDetailError && (
             <div className="bg-white border border-[#d0d7de] rounded-md p-8 text-center text-[#57606a]">
-              {guideSourceMode === "trending"
-                ? "왼쪽 목록에서 기여 가이드를 선택해 주세요."
-                : "왼쪽에 저장소 이름을 입력해 기여 가이드를 불러오세요."}
+              왼쪽에 저장소 이름을 입력해 기여 가이드를 불러오세요.
             </div>
           )}
 
@@ -292,8 +156,6 @@ export function ContributionGuidePage() {
               <div className="p-6 space-y-6">
                 <div className="border-b border-[#d0d7de] pb-4 space-y-2">
                   <div className="flex items-center gap-2 text-[10px] text-[#57606a]">
-                    {targetRepo.trendingRank && <span>월간 Trending #{targetRepo.trendingRank}</span>}
-                    {targetRepo.trendingRank && <span>·</span>}
                     <span>{targetRepo.language}</span>
                     <span>·</span>
                     <span>{targetRepo.license?.id}</span>

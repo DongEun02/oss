@@ -398,8 +398,6 @@ export const fetchOpenSourceRepository = async (fullName: any, githubToken: any)
     activity: repositoryActivity(repository.pushed_at),
     pushedAt: repository.pushed_at || null,
     contributionGuideUrl,
-    contributionGuideApiUrl,
-    trendingRank: null as number | null,
-    starsThisMonth: 0
+    contributionGuideApiUrl
   };
 };

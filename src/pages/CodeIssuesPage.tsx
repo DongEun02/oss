@@ -63,13 +63,9 @@ export function CodeIssuesPage() {
     codexAnalysis,
     codexAnalysisLoading,
     codexAnalysisError,
-    featureRecommendationsLoading,
-    featureRecommendationsError,
-    featureRecommendationFailures,
     interestedTasks,
     toggleTaskInterest,
     openTranslatedGuide,
-    refreshFeatureRecommendations,
     resetFeatureIssueFilters,
     analyzeIssueWithCodex,
     loadRepositoryRecommendations,
@@ -79,7 +75,6 @@ export function CodeIssuesPage() {
     filteredFeatureIssues,
     featureLanguageOptions,
     isGithubIssue,
-    recommendationLoadedAtText,
     issueAssignees
   } = useOssApp();
   const isDetailRoute = !!owner && !!repository && !!issueNumber;
@@ -339,16 +334,12 @@ export function CodeIssuesPage() {
         <div className="page-heading pb-2">
           <h2 className="text-xl font-bold text-[#1f2933]">코드 이슈</h2>
           <p className="text-xs text-[#57606a]">
-            <a href="https://github.com/trending?since=monthly" target="_blank" rel="noreferrer" className="text-[#3f6fd9] font-semibold hover:underline">
-              GitHub 월간 Trending
-            </a>{" "}
-            오픈소스 추천 목록을 살펴보거나 저장소 이름과 이슈 URL로 직접 찾을 수 있습니다.
+            관심 있는 오픈소스 저장소나 GitHub 이슈 URL을 입력해 기여할 작업을 직접 찾을 수 있습니다.
           </p>
         </div>
 
         <div className="feature-source-tabs" role="tablist" aria-label="코드 이슈 찾기 방식">
           {[
-            ["recommended", "추천 이슈"],
             ["repository", "저장소로 찾기"],
             ["issue-url", "이슈 URL로 찾기"]
           ].map(([mode, label]) => (
@@ -370,62 +361,7 @@ export function CodeIssuesPage() {
           ))}
         </div>
 
-        {featureSourceMode === "recommended" ? (
-          <>
-            <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
-              <div className="relative w-full md:max-w-md">
-                <span className="absolute inset-y-0 left-3 flex items-center text-slate-400"><Icons.Search className="w-4 h-4" /></span>
-                <input
-                  type="text"
-                  value={featureRepoSearch}
-                  onChange={event => setFeatureRepoSearch(event.target.value)}
-                  placeholder="코드 이슈, 저장소, 기술 검색"
-                  className="search-input w-full bg-white border focus:border-[#3f6fd9] focus:ring-1 focus:ring-[#3f6fd9] pl-9 pr-4 py-2 text-xs text-[#1f2933] outline-none placeholder:text-slate-400"
-                />
-              </div>
-              <div className="recommendation-sync-summary">
-                <span>{featureRecommendationsLoading ? "GitHub 이슈를 불러오는 중" : <>총 <strong>{filteredFeatureIssues.length}개</strong>의 추천 이슈</>}</span>
-                {recommendationLoadedAtText && !featureRecommendationsLoading && <small>{recommendationLoadedAtText} 동기화</small>}
-                <button type="button" onClick={refreshFeatureRecommendations} disabled={featureRecommendationsLoading}>새로고침</button>
-              </div>
-            </div>
-
-            <IssueFilters
-              language={featureRepoLanguage}
-              languages={featureLanguageOptions}
-              onLanguageChange={setFeatureRepoLanguage}
-              difficulty={selectedDifficulty}
-              onDifficultyChange={setSelectedDifficulty}
-              issueType={selectedIssueType}
-              onIssueTypeChange={setSelectedIssueType}
-            />
-
-            {featureRecommendationsLoading && (
-              <div className="recommendation-status" role="status">
-                <span className="recommendation-status-spinner" aria-hidden="true" />
-                <div><strong>실제 GitHub 이슈를 확인하고 있습니다.</strong><span>담당자와 연관 Pull Request가 없는 열린 이슈만 선별합니다.</span></div>
-              </div>
-            )}
-            {featureRecommendationsError && !featureRecommendationsLoading && (
-              <div className="recommendation-status recommendation-status-error" role="alert">
-                <Icons.Alert className="w-4 h-4 shrink-0" />
-                <div><strong>추천 이슈를 불러오지 못했습니다.</strong><span>{featureRecommendationsError}</span></div>
-                <button type="button" onClick={refreshFeatureRecommendations}>다시 시도</button>
-              </div>
-            )}
-            {featureRecommendationFailures.length > 0 && !featureRecommendationsLoading && (
-              <div className="recommendation-partial-notice" role="status">일부 저장소를 불러오지 못해 나머지 저장소의 이슈만 표시합니다.</div>
-            )}
-            {!featureRecommendationsLoading && !featureRecommendationsError && (
-              <IssueRecommendationGrid
-                issues={filteredFeatureIssues}
-                interestedTasks={interestedTasks}
-                onSelectIssue={selectIssue}
-                onToggleInterest={toggleTaskInterest}
-              />
-            )}
-          </>
-        ) : featureSourceMode === "repository" ? (
+        {featureSourceMode === "repository" ? (
           <div className="space-y-5">
             <section className="issue-import-panel" aria-labelledby="repository-search-heading">
               <h3 id="repository-search-heading">저장소 추천 이슈 찾기</h3>
