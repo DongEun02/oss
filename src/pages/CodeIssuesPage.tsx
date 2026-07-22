@@ -63,6 +63,7 @@ export function CodeIssuesPage() {
     categoryIssues,
     categoryRepositories,
     categoryRecommendationFailures,
+    categoryRecommendationCriteria,
     categoryIssuesLoading,
     categoryIssuesError,
     categoryLoadedAtText,
@@ -531,11 +532,32 @@ export function CodeIssuesPage() {
                   </div>
                 </div>
 
+                {categoryRecommendationCriteria && (
+                  <div className="category-catalog-stats" role="status" aria-label="추천 후보 탐색 범위">
+                    <div>
+                      <strong>{categoryRecommendationCriteria.catalogRepositoryCount || 0}</strong>
+                      <span>전체 카탈로그</span>
+                    </div>
+                    <div>
+                      <strong>{categoryRecommendationCriteria.languageCandidateCount || 0}</strong>
+                      <span>{selectedContributionLanguage} 후보</span>
+                    </div>
+                    <div>
+                      <strong>{categoryRecommendationCriteria.inspectedRepositoryCount || 0}</strong>
+                      <span>이번에 검사</span>
+                    </div>
+                    <div>
+                      <strong>{categoryRecommendationCriteria.matchedRepositoryCount || 0}</strong>
+                      <span>추천 이슈 보유</span>
+                    </div>
+                  </div>
+                )}
+
                 {categoryRepositories.length > 0 && (
                   <section className="category-repository-section" aria-labelledby="category-repository-heading">
                     <div className="category-repository-heading">
-                      <h4 id="category-repository-heading">현재 추천에 포함된 오픈소스 프로젝트</h4>
-                      <span>프로젝트 크기는 제한하지 않고, 실제 이슈의 작업 범위와 난이도를 판단합니다.</span>
+                      <h4 id="category-repository-heading">이번 탐색에서 확인한 오픈소스 프로젝트</h4>
+                      <span>조건을 통과한 이슈가 0개인 저장소도 숨기지 않고 검사 결과를 표시합니다.</span>
                     </div>
                     <div className="category-repository-list">
                       {categoryRepositories.map((repo: any) => (
@@ -544,7 +566,7 @@ export function CodeIssuesPage() {
                           <span>
                             <a href={repo.url} target="_blank" rel="noreferrer"><strong>{repo.fullName}</strong></a>
                             <small>
-                              {repo.language} · 추천 이슈 {repo.issueCount}개
+                              {repo.language} · 조건 통과 이슈 {repo.issueCount}개
                               {repo.contributorFriendliness?.label ? ` · 기여 친화도 ${repo.contributorFriendliness.label}` : ""}
                             </small>
                           </span>
@@ -599,7 +621,7 @@ export function CodeIssuesPage() {
                   onSelectIssue={selectIssue}
                   onToggleInterest={toggleTaskInterest}
                   emptyText={categoryIssues.length === 0
-                    ? `현재 조건을 충족하는 ${activeContributionCategory.title} 이슈를 찾지 못했습니다.`
+                    ? `${selectedContributionLanguage} 후보 ${categoryRecommendationCriteria?.languageCandidateCount || 0}개 중 이번에 ${categoryRecommendationCriteria?.inspectedRepositoryCount || 0}개를 검사했지만, 담당자·연결 PR·작업 의사 댓글이 없는 ${activeContributionCategory.title} 이슈를 찾지 못했습니다.`
                     : "현재 필터에 맞는 이슈가 없습니다."}
                 />
               </>

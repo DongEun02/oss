@@ -28,11 +28,11 @@ type HandlerOptions = {
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000;
 const CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_RECOMMENDATIONS = 18;
-const MAX_CATEGORY_RECOMMENDATIONS = 12;
-const MAX_CATEGORY_CANDIDATES = 36;
-const MAX_CATEGORY_REPOSITORIES = 10;
-const CATEGORY_ISSUE_MAX_AGE_DAYS = 180;
-const CATEGORY_ISSUE_MAX_COMMENTS = 8;
+const MAX_CATEGORY_RECOMMENDATIONS = 18;
+const MAX_CATEGORY_CANDIDATES = 54;
+const MAX_CATEGORY_REPOSITORIES = 16;
+const CATEGORY_ISSUE_MAX_AGE_DAYS = 365;
+const CATEGORY_ISSUE_MAX_COMMENTS = 15;
 const repositoryResponseCache = new Map();
 const categoryResponseCache = new Map<string, { value: any; cachedAt: number }>();
 const categoryCacheKey = (categoryId: ContributionCategoryId, language: ContributionLanguage) => (
@@ -477,11 +477,12 @@ const fetchCategoryRecommendations = async ({
   const category = getContributionCategory(categoryId);
   if (!category) throw new Error("INVALID_CATEGORY");
   const curatedRepositoryNames = getContributionCategoryRepositories(categoryId, language);
-  const catalogRepositories = await fetchCatalogRepositories({
+  const catalogResult = await fetchCatalogRepositories({
     databaseUrl,
     language,
     limit: MAX_CATEGORY_REPOSITORIES
   });
+  const catalogRepositories = catalogResult.repositories;
   const deepWikiUrlByRepository = new Map(
     catalogRepositories.map(repository => [repository.fullName.toLowerCase(), repository.deepWikiUrl])
   );
@@ -510,31 +511,20 @@ const fetchCategoryRecommendations = async ({
     });
   if (activeRepositories.length === 0) throw new Error("CATEGORY_NO_ACTIVE_REPOSITORIES");
 
-  const [issueResults, friendlinessResults] = await Promise.all([
-    Promise.allSettled(
-      activeRepositories.map(repository => fetchRepositoryIssues(repository, githubToken, {
-        limit: 50,
-        source: "github-category"
-      }))
-    ),
-    Promise.allSettled(
-      activeRepositories.map(repository => fetchRepositoryContributorFriendliness(repository, githubToken))
-    )
-  ]);
-  const contributorScores: Record<string, number> = { friendly: 3, mixed: 2, low: 1 };
-  const contributorScore = (friendliness: any) => contributorScores[friendliness?.level] || 0;
+  const issueResults = await Promise.allSettled(
+    activeRepositories.map(repository => fetchRepositoryIssues(repository, githubToken, {
+      limit: 50,
+      source: "github-category"
+    }))
+  );
   const rankedRepositories = activeRepositories
     .map((repository, index) => ({
       repository,
-      issueResult: issueResults[index],
-      contributorFriendliness: friendlinessResults[index].status === "fulfilled"
-        ? friendlinessResults[index].value
-        : null
+      issueResult: issueResults[index]
     }))
     .sort((left, right) => {
       const activityScore = (repository: any) => repository.activity.level === "active" ? 2 : 1;
       return activityScore(right.repository) - activityScore(left.repository)
-        || contributorScore(right.contributorFriendliness) - contributorScore(left.contributorFriendliness)
         || Number(!!right.repository.contributionGuideUrl) - Number(!!left.repository.contributionGuideUrl);
     });
   const matchedIssueLists = rankedRepositories.map(({ repository, issueResult: result }) => {
@@ -576,13 +566,21 @@ const fetchCategoryRecommendations = async ({
   }, new Map<string, number>());
   const repositoriesWithMatches = rankedRepositories
     .filter(({ repository }) => issueCounts.has(repository.fullName));
-  const repositoriesToSummarize = (repositoriesWithMatches.length > 0
-    ? repositoriesWithMatches
-    : rankedRepositories).slice(0, 4);
-  const repositorySummaries = repositoriesToSummarize.map(({ repository, contributorFriendliness }) => (
+  const friendlinessResults = await Promise.allSettled(
+    repositoriesWithMatches.map(({ repository }) => (
+      fetchRepositoryContributorFriendliness(repository, githubToken)
+    ))
+  );
+  const friendlinessByRepository = new Map(
+    repositoriesWithMatches.map(({ repository }, index) => [
+      repository.fullName,
+      friendlinessResults[index].status === "fulfilled" ? friendlinessResults[index].value : null
+    ])
+  );
+  const repositorySummaries = rankedRepositories.map(({ repository }) => (
     repositorySummary(
       repository,
-      contributorFriendliness,
+      friendlinessByRepository.get(repository.fullName) || null,
       issueCounts.get(repository.fullName) || 0,
       deepWikiUrlByRepository.get(repository.fullName.toLowerCase()) || ""
     )
@@ -614,6 +612,11 @@ const fetchCategoryRecommendations = async ({
       activityWindowDays: 90,
       maximumDiscussionComments: CATEGORY_ISSUE_MAX_COMMENTS,
       deepWikiCatalog: catalogRepositories.length > 0,
+      catalogRepositoryCount: catalogResult.totalCount,
+      languageCandidateCount: catalogResult.languageCandidateCount,
+      inspectedRepositoryCount: repositoryNames.length,
+      activeRepositoryCount: activeRepositories.length,
+      matchedRepositoryCount: issueCounts.size,
       repositorySizeExcluded: false,
       requiresNoAssignee: true,
       requiresNoRelatedPullRequest: true,

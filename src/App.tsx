@@ -922,6 +922,7 @@ export default function App() {
   const categoryIssues: any[] = selectedCategoryResult?.issues || [];
   const categoryRepositories: any[] = selectedCategoryResult?.repositories || [];
   const categoryRecommendationFailures: any[] = selectedCategoryResult?.failedRepositories || [];
+  const categoryRecommendationCriteria = selectedCategoryResult?.criteria || null;
   const activeFeatureIssues: any[] = featureSourceMode === 'category'
     ? categoryIssues
     : featureSourceMode === 'repository' ? repositoryIssues : [];
@@ -1031,6 +1032,7 @@ export default function App() {
     categoryIssues,
     categoryRepositories,
     categoryRecommendationFailures,
+    categoryRecommendationCriteria,
     categoryIssuesLoading,
     categoryIssuesError,
     categoryLoadedAtText,
