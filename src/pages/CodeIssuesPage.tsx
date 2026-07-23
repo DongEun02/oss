@@ -131,6 +131,8 @@ export function CodeIssuesPage() {
     || hasRelatedPullRequests
     || hasClaimComments
     || hasIncompleteCommentReview;
+  const issueDeepWikiUrl = issueData?.deepWikiUrl
+    || (issueData?.repo ? `https://deepwiki.com/${issueData.repo}` : "");
   const activeContributionCategory = CONTRIBUTION_CATEGORIES.find(
     category => category.id === selectedContributionCategory
   ) || CONTRIBUTION_CATEGORIES[0];
@@ -352,19 +354,17 @@ export function CodeIssuesPage() {
               </div>
             )}
 
-            {issueData.contributionGuideUrl && (
+            <div className="issue-resource-links">
               <button type="button" onClick={() => openTranslatedGuide(issueData.repo)} className="issue-contribution-guide-link">
                 <Icons.BookOpen className="w-4 h-4 shrink-0" />
                 <span>
                   <strong>이 저장소의 기여 가이드 보기</strong>
-                  <small>{issueData.repo}의 공식 기여 규칙을 한국어로 확인합니다.</small>
+                  <small>{issueData.repo}의 공식 기여 문서를 찾아 한국어로 정리합니다.</small>
                 </span>
                 <Icons.ArrowRight className="w-4 h-4 shrink-0" />
               </button>
-            )}
 
-            {issueData.deepWikiUrl && (
-              <a href={issueData.deepWikiUrl} target="_blank" rel="noreferrer" className="issue-contribution-guide-link">
+              <a href={issueDeepWikiUrl} target="_blank" rel="noreferrer" className="issue-contribution-guide-link">
                 <Icons.BookOpen className="w-4 h-4 shrink-0" />
                 <span>
                   <strong>DeepWiki에서 코드베이스 익히기</strong>
@@ -372,7 +372,7 @@ export function CodeIssuesPage() {
                 </span>
                 <Icons.ArrowRight className="w-4 h-4 shrink-0" />
               </a>
-            )}
+            </div>
           </header>
 
           <header className="codex-analysis-header">

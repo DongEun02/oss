@@ -4364,17 +4364,31 @@ body {
   background: #cf222e;
 }
 
+.issue-resource-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e1e2e3;
+}
+
 .issue-contribution-guide-link {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 11px;
   width: 100%;
-  margin-top: 18px;
-  padding: 14px 0 0;
-  border-top: 1px solid #e1e2e3;
+  min-height: 76px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #e1e2e3;
+  border-radius: 9px;
+  background: #fafafa;
   color: #3366ff;
   text-align: left;
+  text-decoration: none;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
 
 .issue-contribution-guide-link span {
@@ -4403,6 +4417,18 @@ body {
 
 .issue-contribution-guide-link:hover strong {
   color: #3366ff;
+}
+
+.issue-contribution-guide-link:hover {
+  border-color: #c9c9c6;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 620px) {
+  .issue-resource-links {
+    grid-template-columns: 1fr;
+  }
 }
 
 .guide-repository-search-panel {
