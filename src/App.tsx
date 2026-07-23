@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { OssAppProvider } from "./app/OssAppContext";
 import { BrandMark, SITE_ICON_DATA_URL } from "./components/BrandMark";
 import { GitHubAuthControl } from "./components/GitHubAuthControl";
@@ -8,6 +8,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import {
   matchesLanguage
 } from "./data/content";
+import { AboutPage } from "./pages/AboutPage";
 import { CodeIssuesPage } from "./pages/CodeIssuesPage";
 import { ContributionGuidePage } from "./pages/ContributionGuidePage";
 import { LandingPage } from "./pages/LandingPage";
@@ -64,9 +65,12 @@ export default function App() {
       ? "feature"
       : location.pathname.startsWith("/guides")
         ? "guide"
-        : location.pathname.startsWith("/mypage") ? "mypage" : "landing";
+        : location.pathname.startsWith("/mypage")
+          ? "mypage"
+          : location.pathname.startsWith("/about") ? "about" : "landing";
   const routeForView: Record<string, string> = {
     landing: "/",
+    about: "/about",
     translation: "/translations",
     feature: "/issues",
     guide: "/guides",
@@ -1086,7 +1090,7 @@ export default function App() {
 
   return (
     <OssAppProvider value={appContextValue}>
-      <div className="app-root font-sans antialiased flex flex-col selection:bg-[#d5e0f8] selection:text-[#18201d]">
+      <div className={`app-root font-sans antialiased flex flex-col selection:bg-[#d5e0f8] selection:text-[#18201d] ${view === "landing" ? "app-root-landing" : ""}`}>
         {toast && (
           <div className="fixed bottom-6 right-6 z-50 bg-[#1f2933] text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 border border-[#30363d] text-sm animate-fade-in">
             <Icons.Check className="text-[#3fb950] w-4 h-4" />
@@ -1094,7 +1098,7 @@ export default function App() {
           </div>
         )}
 
-        <header className="app-header">
+        {view !== "landing" && <header className="app-header">
           <div className="app-header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
             <button type="button" className="app-brand flex items-center gap-3" onClick={() => setView("landing")}>
               <span className="brand-mark"><BrandMark /></span>
@@ -1105,6 +1109,7 @@ export default function App() {
             </button>
 
             <nav className="app-nav flex items-center gap-2" aria-label="주요 메뉴">
+              <button type="button" onClick={() => setView("about")} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "about" ? "nav-button-active" : ""}`}>서비스 소개</button>
               <button type="button" onClick={() => { setFeatureSourceMode("category"); setView("feature"); }} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "feature" || view === "translation" ? "nav-button-active" : ""}`}>첫 기여 찾기</button>
               <button type="button" onClick={() => setView("guide")} className={`nav-button text-xs px-3 py-1.5 transition-all ${view === "guide" ? "nav-button-active" : ""}`}>기여 가이드</button>
               {authUser && (
@@ -1126,11 +1131,12 @@ export default function App() {
               />
             </div>
           </div>
-        </header>
+        </header>}
 
-        <main className="app-main flex-grow">
+        <main className={`app-main flex-grow ${view === "landing" ? "landing-main" : ""}`}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
             <Route path="/translations" element={<Navigate to="/issues" replace />} />
             <Route path="/translations/:repoKey/:docId" element={<TranslationPage />} />
             <Route path="/issues" element={<CodeIssuesPage />} />
@@ -1142,7 +1148,7 @@ export default function App() {
           </Routes>
         </main>
 
-        <footer className="app-footer">
+        {view !== "landing" && <footer className="app-footer">
           <div className="app-footer-inner">
             <div className="app-footer-top">
               <div className="app-footer-brand">
@@ -1150,6 +1156,7 @@ export default function App() {
                 <strong>기여로</strong>
               </div>
               <div className="app-footer-links">
+                <Link to="/about">서비스 소개</Link>
                 <a href="#">이용약관</a>
                 <a href="#">개인정보 처리방침</a>
                 <a href="#">문의하기</a>
@@ -1157,7 +1164,7 @@ export default function App() {
             </div>
             <p>오픈소스 첫 기여로 가는 가장 쉬운 길. © 2026 기여로</p>
           </div>
-        </footer>
+        </footer>}
       </div>
     </OssAppProvider>
   );

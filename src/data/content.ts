@@ -374,9 +374,17 @@ export const REPO_VISUALS: Record<string, { image: string; background: string }>
   "Rust Book 한국어 문서": { image: "https://github.com/rust-lang.png?size=320", background: "#f8f1eb" }
 };
 
-export const getRepoVisual = (repoName: any) => REPO_VISUALS[repoName] || {
-  image: "https://github.com/github.png?size=320",
-  background: "#f3f5f7"
+export const getRepoVisual = (repoName: any) => {
+  const owner = typeof repoName === "string" && repoName.includes("/")
+    ? repoName.split("/")[0].trim()
+    : "";
+
+  return REPO_VISUALS[repoName] || {
+    image: owner
+      ? `https://github.com/${encodeURIComponent(owner)}.png?size=320`
+      : "https://github.com/github.png?size=320",
+    background: "#f3f5f7"
+  };
 };
 
 export const matchesLanguage = (items: any, selectedLanguage: any) => {

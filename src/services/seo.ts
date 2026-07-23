@@ -13,6 +13,14 @@ const DEFAULT_SEO: SeoConfig = {
 };
 
 function getSeoConfig(pathname: string): SeoConfig {
+  if (pathname.startsWith("/about")) {
+    return {
+      title: "서비스 소개 | 기여로",
+      description: "기여로가 첫 오픈소스 기여를 찾고, 이해하고, 준비하는 과정을 어떻게 돕는지 알아보세요.",
+      canonicalPath: "/about"
+    };
+  }
+
   if (pathname.startsWith("/issues") || pathname.startsWith("/translations")) {
     return {
       title: "첫 기여 찾기 | 기여로",
