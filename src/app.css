@@ -112,8 +112,8 @@
 .landing-home-minimal .landing-intro-content {
   z-index: 3;
   order: 1;
-  width: fit-content;
-  max-width: min(900px, 100%);
+  width: 100%;
+  max-width: 900px;
   text-align: left;
   transform: translateY(-7vh);
 }
@@ -411,7 +411,7 @@
   }
 
   .landing-home-minimal .landing-intro-content {
-    max-width: min(720px, 100%);
+    max-width: 720px;
     transform: translateY(-6vh);
   }
 
@@ -452,7 +452,6 @@
   }
 
   .landing-home-minimal .landing-intro-content {
-    width: 100%;
     max-width: none;
     transform: translateY(-7vh);
   }
